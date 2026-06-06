@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot, increment } from 'firebase/firestore';
@@ -113,6 +114,7 @@ const MAPA_IDEOLOGIAS: Record<string, string[]> = {
 };
 
 export default function App() {
+  const navigate = useNavigate();
   // --- MEMORIA DE LA APLICACIÓN (Estado) ---
   const [pasoActual, setPasoActual] = useState<'bienvenida' | 'seleccion_pais' | 'formulario' | 'completado' | 'moderacion' | 'dashboard' | 'cargando' | 'que_es_estadored'>('cargando');
   const [zoomTarget, setZoomTarget] = useState<{lat: number, lng: number, altitude: number, radius?: number} | null>(null);
@@ -161,17 +163,26 @@ export default function App() {
         unsubscribeDoc = onSnapshot(doc(db, 'users', user.uid), (uDoc) => {
           if (uDoc.exists()) {
             setRespuestas(uDoc.data());
-            setPasoActual(prev => (prev === 'cargando' || prev === 'bienvenida') ? 'dashboard' : prev);
+            setPasoActual(prev => {
+              if (prev === 'cargando' || prev === 'bienvenida') {
+                navigate('/dashboard', { replace: true });
+                return 'dashboard';
+              }
+              return prev;
+            });
           } else {
             setPasoActual('bienvenida');
+            navigate('/', { replace: true });
           }
         }, (err) => {
           console.error(err);
           setPasoActual('bienvenida');
+          navigate('/', { replace: true });
         });
       } else {
         if (unsubscribeDoc) unsubscribeDoc();
         setPasoActual('bienvenida');
+        navigate('/', { replace: true });
       }
     });
     return () => {
@@ -527,6 +538,7 @@ export default function App() {
       if (userDoc.exists()) {
         setRespuestas(userDoc.data());
         setPasoActual('dashboard');
+        navigate('/dashboard');
         setMostrarLogin(false);
       } else {
         // En caso de fallar o si se migra, buscamos por alias
@@ -535,6 +547,7 @@ export default function App() {
         if(!querySnapshot.empty) {
             setRespuestas(querySnapshot.docs[0].data());
             setPasoActual('dashboard');
+            navigate('/dashboard');
             setMostrarLogin(false);
         } else {
             setErrorLogin('No se encontró información del nodo.');
@@ -590,53 +603,55 @@ export default function App() {
 
   return (
     <div className="flex h-[100dvh] w-full bg-creambg text-charcoal font-sans overflow-hidden relative paper-texture">
-      
-      {/* =======================================================
-          PANTALLA DE BIENVENIDA (Superpuesta en la parte superior)
-          ======================================================= */}
-      <div 
-        className={`absolute inset-0 z-20 flex flex-col items-center justify-center md:justify-start md:pt-16 px-4 transition-all duration-1000 pointer-events-none ${
-          pasoActual !== 'bienvenida' ? 'opacity-0 scale-110' : 'opacity-100 bg-charcoal/10 backdrop-blur-xs'
-        }`}
-      >
-        <div className={`bg-white/94 backdrop-blur-lg border border-warmgray/80 p-8 md:p-10 stone-card shadow-xl max-w-lg w-full text-center relative overflow-hidden transition-all duration-300 ${
+      <Routes>
+        <Route path="/" element={
+          <>
+            {/* =======================================================
+                PANTALLA DE BIENVENIDA (Superpuesta en la parte superior)
+                ======================================================= */}
+            <div 
+              className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-4 transition-all duration-1000 pointer-events-none ${
+                pasoActual !== 'bienvenida' ? 'opacity-0 scale-110' : 'opacity-100 bg-charcoal/40 backdrop-blur-sm'
+              }`}
+            >
+        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-8 sm:p-12 stone-card shadow-2xl max-w-[90%] md:max-w-lg w-full text-center relative overflow-hidden transition-all duration-300 rounded-3xl ${
           pasoActual === 'bienvenida' ? 'pointer-events-auto' : 'pointer-events-none'
         }`}>
           {/* Earth-toned background decor */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-sandbrown-light/10 rounded-full blur-3xl -z-10"></div>
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-sandbrown-light/20 rounded-full blur-[60px] -z-10"></div>
           
-          <EstadoRedLogo showText={true} textSize="lg" className="mb-6" />
+          <EstadoRedLogo showText={true} textSize="xl" className="mb-8" />
           
-          <div className="h-[2px] w-12 bg-palmgreen mx-auto mb-6 opacity-70 rounded-full"></div>
+          <div className="h-[3px] w-16 bg-palmgreen mx-auto mb-8 opacity-80 rounded-full"></div>
           
           {!mostrarLogin ? (
             <div className="flex flex-col gap-4">
               <button 
                 onClick={empezarSeleccionPais}
-                className="stone-btn w-full bg-palmgreen hover:bg-palmgreen-dark text-white border border-palmgreen/20 p-5 shadow-md flex items-center justify-center cursor-pointer"
+                className="stone-btn w-full bg-palmgreen hover:bg-palmgreen-dark text-white border border-palmgreen/20 p-5 shadow-lg flex items-center justify-center cursor-pointer rounded-2xl transition hover:-translate-y-1"
               >
-                <span className="font-semibold text-sm md:text-base flex items-center justify-center gap-3">
-                  <Globe2 className="w-5 h-5 shrink-0 text-skyblue-light" /> 
+                <span className="font-bold text-sm md:text-base flex items-center justify-center gap-3">
+                  <Globe2 className="w-6 h-6 shrink-0 text-skyblue-light" /> 
                   Girar el globo y elegir territorio
                 </span>
               </button>
               
               <button 
                 onClick={() => setMostrarLogin(true)}
-                className="stone-btn w-full bg-white hover:bg-warmgray/40 text-charcoal/90 border border-warmgray-dark/80 p-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                className="stone-btn w-full bg-transparent hover:bg-warmgray/50 text-charcoal/80 border border-warmgray-dark p-4 text-xs font-bold uppercase tracking-widest cursor-pointer rounded-2xl transition"
               >
                 Ingresar a mi Nodo Existente
               </button>
             </div>
           ) : (
-            <form onSubmit={manejarLogin} className="w-full flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-350">
-               <h2 className="font-serif text-charcoal text-xl font-bold mb-1">Acceso al Estado Red</h2>
+             <form onSubmit={manejarLogin} className="w-full flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-350">
+               <h2 className="font-serif text-charcoal text-2xl md:text-3xl font-black mb-2">Acceso al Estado Red</h2>
                <input 
                  type="text" 
                  placeholder="Tu Alias o Pseudónimo..." 
                  value={aliasLogin}
                  onChange={(e) => { setAliasLogin(e.target.value); setErrorLogin(''); }}
-                 className="w-full stone-input bg-creambg/50 border border-warmgray-dark rounded-xl px-4 py-3.5 text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-1 focus:ring-sandbrown"
+                 className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium"
                  autoFocus
                />
                <input 
@@ -644,20 +659,20 @@ export default function App() {
                  placeholder="Tu Contraseña..." 
                  value={passwordLogin}
                  onChange={(e) => { setPasswordLogin(e.target.value); setErrorLogin(''); }}
-                 className="w-full stone-input bg-creambg/50 border border-warmgray-dark rounded-xl px-4 py-3.5 text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-1 focus:ring-sandbrown"
+                 className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium"
                />
-               {errorLogin && <p className="text-rust text-xs text-left px-2 font-medium">{errorLogin}</p>}
-               <div className="flex gap-2.5 w-full mt-2">
+               {errorLogin && <p className="text-rust text-xs text-left px-2 font-bold bg-rust/10 py-2 rounded-lg">{errorLogin}</p>}
+               <div className="flex gap-3 w-full mt-2">
                  <button 
                    type="button" 
                    onClick={() => setMostrarLogin(false)} 
-                   className="stone-btn px-4 py-3.5 bg-warmgray/50 text-charcoal/80 hover:bg-warmgray border border-warmgray-dark rounded-xl transition-all w-1/3 text-xs font-bold uppercase tracking-wide"
+                   className="stone-btn px-4 py-4 bg-warmgray/60 text-charcoal/80 hover:bg-warmgray border border-warmgray-dark rounded-xl transition-all w-1/3 text-[11px] font-black uppercase tracking-widest"
                  >
                    Volver
                  </button>
                  <button 
                    type="submit" 
-                   className="stone-btn px-4 py-3.5 bg-sandbrown hover:bg-sandbrown-dark text-white border border-sandbrown/20 rounded-xl transition-all w-2/3 font-semibold shadow-md shadow-sandbrown/10 uppercase tracking-wide text-xs"
+                   className="stone-btn px-4 py-4 bg-sandbrown hover:bg-sandbrown-dark text-white border border-sandbrown/20 rounded-xl transition-all w-2/3 font-black shadow-md shadow-sandbrown/20 uppercase tracking-widest text-[11px]"
                  >
                    Ingresar a la Red
                  </button>
@@ -669,7 +684,7 @@ export default function App() {
         {/* Botón de ¿Qué es EstadoRed? */}
         <button
           onClick={() => setPasoActual('que_es_estadored')}
-          className={`mt-6 text-sm font-semibold uppercase tracking-wider text-charcoal/80 bg-white/60 backdrop-blur-md px-6 py-3 border border-warmgray shadow-sm hover:bg-white hover:text-charcoal hover:shadow-md transition-all rounded-xl pointer-events-auto ${pasoActual === 'bienvenida' ? 'opacity-100' : 'opacity-0 hidden'}`}
+          className={`mt-8 text-xs font-black uppercase tracking-widest text-charcoal/80 bg-white/80 backdrop-blur-xl px-6 py-3.5 border border-white/50 shadow-lg hover:bg-white hover:text-charcoal transition-all rounded-2xl pointer-events-auto ${pasoActual === 'bienvenida' ? 'opacity-100' : 'opacity-0 hidden'}`}
         >
           ¿Qué es EstadoRed?
         </button>
@@ -679,7 +694,7 @@ export default function App() {
           PANEL IZQUIERDO: FORMULARIO (Wizard basado en tu doc)
           ======================================================= */}
       <aside 
-        className={`w-full md:w-[500px] h-[100dvh] flex flex-col z-10 bg-[#FAF9F5]/95 backdrop-blur-2xl border-r border-[#ECE8DE] shadow-xl transition-all duration-700 ease-in-out ${
+        className={`w-full md:w-[540px] xl:w-[600px] h-[100dvh] flex flex-col z-10 bg-[#FAF9F5]/98 backdrop-blur-3xl border-r border-[#ECE8DE] shadow-2xl transition-all duration-700 ease-in-out ${
           pasoActual === 'formulario' || pasoActual === 'completado' ? 'translate-x-0 relative opacity-100 pointer-events-auto' : '-translate-x-full absolute opacity-0 pointer-events-none'
         }`}
       >
@@ -1094,15 +1109,17 @@ export default function App() {
         </div>
       )}
 
-      {/* DASHBOARD VIEW */}
-      {pasoActual === 'dashboard' && <Dashboard respuestas={respuestas} />}
-      
       {/* PANTALLA DE CARGA */}
       {pasoActual === 'cargando' && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-creambg text-sandbrown paper-texture">
           <EstadoRedLogo showText={true} textSize="md" className="mb-4 animate-pulse" />
         </div>
       )}
+      </>} />
+
+      <Route path="/dashboard/*" element={<Dashboard respuestas={respuestas} />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
     </div>
   );
 }

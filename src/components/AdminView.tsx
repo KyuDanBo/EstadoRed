@@ -32,7 +32,7 @@ import { BibliotecaDigital } from './BibliotecaDigital';
 export default function AdminView() {
   const [stats, setStats] = useState({ users: 0, nodes: 0, proposals: 0, courses: 0, networks: 0 });
   const [loading, setLoading] = useState(true);
-  const [adminTab, setAdminTab] = useState<'control' | 'crear' | 'grafo' | 'configuraciones' | 'documentos'>('control');
+  const [adminTab, setAdminTab] = useState<'control' | 'crear' | 'grafo' | 'configuraciones' | 'documentos' | 'telegram' | 'votaciones'>('control');
   const [pendingNodeRequests, setPendingNodeRequests] = useState<any[]>([]);
   const [pendingNetworkRequests, setPendingNetworkRequests] = useState<any[]>([]);
 
@@ -643,6 +643,16 @@ export default function AdminView() {
           }`}
         >
           <BookOpen className="w-3.5 h-3.5 text-sandbrown" /> Docs
+        </button>
+        <button
+          onClick={() => { setAdminTab('votaciones'); setSuccessMsg(null); }}
+          className={`flex-1 min-w-[80px] py-2 text-center text-[10px] font-bold uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${
+            adminTab === 'votaciones' 
+              ? 'bg-[#FAF9F5] text-charcoal shadow-xs border border-[#ECE8DE]' 
+              : 'text-charcoal/50 hover:bg-[#FAF9F5]/40'
+          }`}
+        >
+          <Activity className="w-3.5 h-3.5 text-palmgreen" /> Votaciones
         </button>
         <button
           onClick={() => { setAdminTab('grafo'); setSuccessMsg(null); }}
@@ -1674,6 +1684,34 @@ export default function AdminView() {
             </p>
           </div>
           <BibliotecaDigital userProfile={{ alias: 'Administrador Nodo Central', territorio: 'Nacional' }} initialTab="subir" />
+        </div>
+      )}
+
+      
+      {adminTab === 'votaciones' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="bg-white/95 border border-[#ECE8DE] stone-card p-6 md:p-8 shadow-sm rounded-3xl">
+            <h3 className="font-serif font-black text-xl text-charcoal flex items-center gap-2 mb-4">
+              <Activity className="w-5 h-5 text-palmgreen" /> Gestión de Votaciones
+            </h3>
+            <p className="text-xs text-charcoal/60 mb-6">
+              Esta sección permite a los administradores programar y publicar nuevas consultas vinculantes en la red, 
+              así como controlar el estado de votación. (Se pueden agregar formularios más extensos en las próximas versiones).
+            </p>
+            <div className="bg-warmgray/30 p-4 border border-brand-200 shadow-inner rounded-xl">
+              <p className="text-sm font-bold text-brand-800">Has activado con éxito la primera votación nacional:</p>
+              <ul className="list-disc text-xs text-brand-700/80 pl-5 mt-2 space-y-1">
+                <li>Ante la imposibilidad de dialogo con los sectores movilizados ¿Qué debería hacer el Gobierno nacional?</li>
+                <li>Habilitada en la Red: Nacional</li>
+              </ul>
+              <button 
+                onClick={() => alert("Función para crear nuevas votaciones será habilitada en el futuro.")} 
+                className="mt-4 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition"
+              >
+                + Crear Nueva Votación
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

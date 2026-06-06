@@ -174,17 +174,21 @@ export default function ActiveVotings({ userProfile }: ActiveVotingsProps) {
 
   if (votings.length === 0) {
     return (
-      <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 max-w-3xl mx-auto py-4 text-center">
-        <div className="w-20 h-20 bg-warmgray/50 rounded-full flex mx-auto items-center justify-center mb-6 shadow-sm border border-[#ECE8DE]">
-           <Shield className="text-sandbrown w-10 h-10" />
+      <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 max-w-3xl mx-auto py-10 text-center">
+        <div className="w-24 h-24 bg-[#FAF9F5] border border-[#ECE8DE] rounded-full flex mx-auto items-center justify-center mb-6 shadow-sm">
+           <CheckCircle2 className="text-palmgreen w-12 h-12" />
         </div>
-        <h2 className="text-xl font-bold font-serif text-charcoal">Gracias por tu soberanía y disposición</h2>
-        <p className="text-charcoal/70 text-sm max-w-lg mx-auto leading-relaxed">
-          El IAsesor está recopilando consensos y propuestas ciudadanas para habilitar las próximas consultas vinculantes de soberanía en tus niveles.
+        <h2 className="text-2xl font-black font-serif text-charcoal">Gracias por tu participación en la Red</h2>
+        <p className="text-charcoal/70 text-sm max-w-md mx-auto leading-relaxed">
+          Actualmente has participado en todos los debates vinculantes. El sistema de EstadoRed enviará nuevas notificaciones de asambleas cuando estén listos los consensos iniciales.
         </p>
-        <p className="text-[11px] text-charcoal/50 font-mono tracking-wider font-bold mt-4 uppercase">No hay votaciones activas en este momento.</p>
-        <div className="mt-8 pt-6 border-t border-[#ECE8DE] flex justify-center gap-4 text-xs font-bold text-charcoal/40 uppercase tracking-widest">
-           <span>MUNICIPAL</span> • <span>DEPARTAMENTAL</span> • <span>NACIONAL</span>
+        <div className="bg-sandbrown/5 border border-sandbrown/20 p-4 rounded-xl mt-6 inline-block">
+          <p className="text-xs text-charcoal/80 font-bold uppercase tracking-widest flex items-center gap-2">
+            <Info className="w-4 h-4 text-sandbrown" /> Pronto nuevas votaciones 
+          </p>
+        </div>
+        <div className="mt-8 pt-8 border-t border-[#ECE8DE]/50 flex justify-center gap-6 text-[10px] font-bold text-charcoal/40 uppercase tracking-widest">
+           <span>Municipal</span> • <span>Departamental</span> • <span>Nacional</span>
         </div>
       </div>
     );

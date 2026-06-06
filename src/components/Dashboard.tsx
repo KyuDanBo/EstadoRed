@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc, onSnapshot, collection, addDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
@@ -169,11 +170,20 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
   const [chatLoading, setChatLoading] = useState(false);
   
   // Navigation & UI States
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathParts = location.pathname.split('/');
+  const currentTabRaw = pathParts[2] || 'identidad';
+  const currentTab = ['identidad', 'buscar_nodos', 'cursos', 'configuraciones', 'estructura_sistema', 'delegacion', 'fiscalizacion', 'admin', 'votaciones', 'nodos_fisicos', 'biblioteca', 'insignias', 'iniciativas', 'editor_propuesta', 'denuncias'].includes(currentTabRaw) ? currentTabRaw : 'identidad';
+
+  const navigateTo = (tab: string) => {
+    navigate(`/dashboard/${tab}`);
+  };
+
   const [activeCollectiveNode, setActiveCollectiveNode] = useState<{
     type: 'territorio' | 'ocupacion' | 'ideologia';
     value: string;
   } | null>(null);
-  const [currentTab, setCurrentTab] = useState<'identidad' | 'buscar_nodos' | 'cursos' | 'configuraciones' | 'estructura_sistema' | 'delegacion' | 'fiscalizacion' | 'admin' | 'votaciones' | 'nodos_fisicos' | 'biblioteca' | 'insignias' | 'iniciativas' | 'editor_propuesta' | 'denuncias'>('identidad');
   const [selectedDocSection, setSelectedDocSection] = useState<'prologo' | 'arquitectura' | 'omnicanal' | 'auditoria' | 'roadmap'>('prologo');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
@@ -302,23 +312,11 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
     };
   }, []);
 
-  const navigateTo = (tab: any, node: any = null) => {
-    setCurrentTab(tab);
+  const switchTab = (tab: any, node: any = null) => {
+    navigateTo(tab);
     setActiveCollectiveNode(node);
-    window.history.pushState({ tab, node }, '', `?tab=${tab}`);
     setMobileMenuOpen(false);
   };
-
-  useEffect(() => {
-    const handlePopstate = (e: PopStateEvent) => {
-      if (e.state) {
-        setCurrentTab(e.state.tab || 'identidad');
-        setActiveCollectiveNode(e.state.node || null);
-      }
-    };
-    window.addEventListener('popstate', handlePopstate);
-    return () => window.removeEventListener('popstate', handlePopstate);
-  }, []);
 
   const activeTab = activeCollectiveNode !== null 
     ? 'comunidad' 
@@ -640,7 +638,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setActiveCollectiveNode(null);
-                setCurrentTab('buscar_nodos');
+                switchTab('buscar_nodos');
               }}
               className="w-full bg-[#FAF9F5] border border-[#ECE8DE] rounded-xl pl-9 pr-2 py-2 text-xs text-charcoal focus:outline-none focus:border-sandbrown placeholder-charcoal/45 font-sans"
             />
@@ -651,62 +649,77 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
         <div className="space-y-1.5 pb-20">
           
           <div className="mb-4">
+            <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Atención Continua</p>
+            <a 
+              href={`https://t.me/EstadoRedBot?start=asesor_personal`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center justify-between bg-skyblue/10 text-skyblue-dark hover:bg-skyblue/20 border border-skyblue/25 mb-2 group"
+            >
+              <div className="flex items-center gap-3">
+                <Zap className="w-4 h-4 animate-pulse" /> <span>IAsesor Personal</span>
+              </div>
+              <ExternalLink className="w-3 h-3 text-skyblue opacity-50 group-hover:opacity-100" />
+            </a>
+          </div>
+
+          <div className="mb-4">
             <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Mi Identidad</p>
-            <button onClick={() => navigateTo('identidad')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'identidad' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('identidad')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'identidad' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <User className="w-4 h-4" /> <span>Mi Ficha</span>
             </button>
-            <button onClick={() => navigateTo('insignias')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'insignias' ? 'bg-[#A06A42]/10 text-[#A06A42] border-[#A06A42]/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('insignias')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'insignias' ? 'bg-[#A06A42]/10 text-[#A06A42] border-[#A06A42]/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Award className="w-4 h-4 text-amber-500 hover:animate-pulse" /> <span>Mis Insignias</span>
             </button>
-            <button onClick={() => navigateTo('iniciativas')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'iniciativas' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('iniciativas')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'iniciativas' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Sparkles className="w-4 h-4 text-palmgreen" /> <span>Mis Iniciativas</span>
             </button>
-            <button onClick={() => navigateTo('editor_propuesta')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'editor_propuesta' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('editor_propuesta')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'editor_propuesta' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <BookOpen className="w-4 h-4 text-purple-600" /> <span>Visión de País</span>
             </button>
           </div>
 
           <div className="mb-4">
             <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Redes Territoriales</p>
-            <button onClick={() => navigateTo('delegacion')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'delegacion' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('delegacion')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'delegacion' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Network className="w-4 h-4 text-skyblue" /> <span>Estructura de Red</span>
             </button>
-            <button onClick={() => navigateTo('nodos_fisicos')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'nodos_fisicos' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('nodos_fisicos')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'nodos_fisicos' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <MapPin className="w-4 h-4 text-sandbrown" /> <span>Nodos Físicos</span>
             </button>
           </div>
 
           <div className="mb-4">
             <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Control Social</p>
-            <button onClick={() => navigateTo('fiscalizacion')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'fiscalizacion' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('fiscalizacion')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'fiscalizacion' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Shield className="w-4 h-4" /> <span>Fiscalización</span>
             </button>
-            <button onClick={() => navigateTo('denuncias')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'denuncias' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('denuncias')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'denuncias' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <AlertTriangle className="w-4 h-4 text-red-500" /> <span>Denuncia Ciudadana</span>
             </button>
           </div>
 
           <div className="mb-4">
             <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Más Conocimiento</p>
-            <button onClick={() => navigateTo('cursos')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'cursos' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('cursos')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'cursos' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <BookOpen className="w-4 h-4 text-charcoal" /> <span>Academia Cívica</span>
             </button>
-            <button onClick={() => navigateTo('biblioteca')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'biblioteca' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('biblioteca')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'biblioteca' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Book className="w-4 h-4 text-sandbrown" /> <span>Biblioteca Digital</span>
             </button>
-            <button onClick={() => navigateTo('que_es')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'que_es' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('que_es')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'que_es' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Info className="w-4 h-4 text-skyblue" /> <span>¿Qué es EstadoRed?</span>
             </button>
           </div>
 
           <div className="pt-2 border-t border-[#ECE8DE]">
-            <button onClick={() => navigateTo('configuraciones')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'configuraciones' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
+            <button onClick={() => switchTab('configuraciones')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'configuraciones' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
               <Settings className="w-4 h-4 text-charcoal/70" /> <span>Configuración</span>
             </button>
 
             {(auth.currentUser?.email === 'daren.bo.lp@gmail.com' || auth.currentUser?.email === 'admin@estadored.app' || userProfile?.isAdmin === true || userProfile?.rol === 'Admin') && (
               <button 
-                onClick={() => navigateTo('estructura_sistema')}
+                onClick={() => switchTab('estructura_sistema')}
                 className={`w-full mt-2 text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'estructura_sistema' ? 'bg-[#A06A42]/10 text-[#A06A42] border-[#A06A42]/20 font-bold' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}
               >
                 <Network className="w-4 h-4 text-charcoal" />
@@ -883,7 +896,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
 
       {/* MOBILE DRAWER */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-x-0 top-[53px] bottom-0 bg-white z-40 p-6 overflow-y-auto animate-in slide-in-from-top-4 duration-300">
+        <div className="md:hidden fixed inset-x-0 top-[60px] bottom-0 bg-white z-40 p-6 overflow-y-auto animate-in slide-in-from-top-4 duration-300">
           {renderSidebarContent()}
         </div>
       )}
@@ -958,7 +971,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                   <div className="w-full">
                     {/* Votaciones Activas Button */}
                     <button 
-                      onClick={() => setCurrentTab('votaciones')}
+                      onClick={() => switchTab('votaciones')}
                       className="stone-btn w-full px-6 py-4 bg-brand-50 hover:bg-brand-100/50 border border-brand-500/20 text-brand-700 font-extrabold uppercase tracking-wider shadow-sm transition-all rounded-xl flex items-center justify-center gap-2.5 cursor-pointer"
                     >
                       <Target className="w-4 h-4 text-brand-600" />
@@ -999,7 +1012,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                       <button 
                         onClick={() => {
                           setSelectedVector('territorio');
-                          setTimeout(() => navigateTo('comunidad', { type: 'territorio', value: muni }), 300);
+                          setTimeout(() => switchTab('comunidad', { type: 'territorio', value: muni }), 300);
                         }}
                         className={`absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center group cursor-pointer select-none transition-all duration-300 ${selectedVector === 'territorio' ? 'scale-110' : 'hover:scale-105'}`}
                       >
@@ -1016,7 +1029,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                       <button 
                         onClick={() => {
                           setSelectedVector('ocupacion');
-                          setTimeout(() => navigateTo('comunidad', { type: 'ocupacion', value: rubro }), 300);
+                          setTimeout(() => switchTab('comunidad', { type: 'ocupacion', value: rubro }), 300);
                         }}
                         className={`absolute bottom-0 left-1 flex flex-col items-center group cursor-pointer select-none transition-all duration-300 ${selectedVector === 'ocupacion' ? 'scale-110' : 'hover:scale-105'}`}
                       >
@@ -1033,7 +1046,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                       <button 
                         onClick={() => {
                           setSelectedVector('ideologia');
-                          setTimeout(() => navigateTo('comunidad', { type: 'ideologia', value: ideologia }), 300);
+                          setTimeout(() => switchTab('comunidad', { type: 'ideologia', value: ideologia }), 300);
                         }}
                         className={`absolute bottom-0 right-1 flex flex-col items-center group cursor-pointer select-none transition-all duration-300 ${selectedVector === 'ideologia' ? 'scale-110' : 'hover:scale-105'}`}
                       >
@@ -1077,7 +1090,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                       </p>
                     </div>
                     <button 
-                      onClick={() => navigateTo('identidad')}
+                      onClick={() => switchTab('identidad')}
                       className="stone-btn px-4 py-2 bg-[#FAF9F5] hover:bg-[#FAF9F5]/80 text-charcoal border border-[#ECE8DE] text-[10px] font-black uppercase tracking-wider shadow-sm cursor-pointer"
                     >
                       ← Volver a Mi Ficha
@@ -1237,7 +1250,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                       onNodeClick={(type, value) => {
                         if (type === 'user') {
                           setActiveCollectiveNode(null);
-                          setCurrentTab('identidad');
+                          switchTab('identidad');
                         } else {
                           setActiveCollectiveNode({ type, value });
                         }
@@ -1321,7 +1334,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                                       <p className="text-[9px] text-[#A06A42] font-semibold">📍 {node.address}</p>
                                     </div>
                                     <button 
-                                      onClick={() => setCurrentTab('nodos_fisicos')}
+                                      onClick={() => switchTab('nodos_fisicos')}
                                       className="stone-btn w-full mt-4 py-1.5 bg-[#A06A42] hover:bg-[#A06A42]/95 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg"
                                     >
                                       Ir a Nodos Físicos
@@ -1355,7 +1368,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                                       <p className="text-[10px] text-charcoal/60 leading-normal mb-2">{net.desc}</p>
                                     </div>
                                     <button 
-                                      onClick={() => setCurrentTab('delegacion')}
+                                      onClick={() => switchTab('delegacion')}
                                       className="stone-btn w-full mt-3 py-1.5 bg-charcoal hover:bg-charcoal/95 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg"
                                     >
                                       Ir a Redes Territoriales
@@ -1389,7 +1402,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                                       <p className="text-[10.5px] text-charcoal/65 leading-normal mb-2 font-serif">{law.desc}</p>
                                     </div>
                                     <button 
-                                      onClick={() => setCurrentTab('fiscalizacion')}
+                                      onClick={() => switchTab('fiscalizacion')}
                                       className="stone-btn w-full mt-3 py-1.5 bg-white border border-[#ECE8DE] text-charcoal hover:bg-neutral-50 font-bold text-[9px] uppercase tracking-wider rounded-lg"
                                     >
                                       Ir a Leyes de Control Social
@@ -1425,7 +1438,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                                       <h5 className="font-bold text-xs text-charcoal mb-1.5 mt-1">{c.title}</h5>
                                     </div>
                                     <button 
-                                      onClick={() => setCurrentTab('fiscalizacion')}
+                                      onClick={() => switchTab('fiscalizacion')}
                                       className="stone-btn w-full mt-3 py-1.5 bg-neutral-100 border border-[#ECE8DE] text-charcoal hover:bg-neutral-200 font-bold text-[9px] uppercase tracking-wider rounded-lg"
                                     >
                                       Ir a Tablero SICOES
@@ -2119,7 +2132,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                       </p>
                     </div>
                     <button 
-                      onClick={() => navigateTo('identidad')}
+                      onClick={() => switchTab('identidad')}
                       className="stone-btn px-4 py-2 bg-[#FAF9F5] hover:bg-warmgray/30 text-charcoal border border-[#ECE8DE] text-[10px] font-bold uppercase tracking-wider shadow-sm cursor-pointer"
                     >
                       ← Volver a Mi Ficha
@@ -2152,13 +2165,13 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                   </a>
 
                   <a 
-                    href={`https://t.me/mock_estadored_${activeCollectiveNode.type}_${activeCollectiveNode.value.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
+                    href={`https://t.me/EstadoRedBot?start=nodo_${activeCollectiveNode.value.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="w-full bg-[#0088cc]/5 hover:bg-[#0088cc]/10 border border-[#0088cc]/15 rounded-2xl p-3.5 transition-all text-xs flex flex-col gap-1 text-left decoration-transparent group"
                   >
-                    <p className="font-bold text-[#0088cc] flex items-center gap-1.5"><span className="text-sm">📍</span> Grupo Telegram Red</p>
-                    <p className="text-[10px] text-charcoal/50">Debate del nodo: {activeCollectiveNode.value}</p>
+                    <p className="font-bold text-[#0088cc] flex items-center gap-1.5"><span className="text-sm">📍</span> Bot IAsesor & Asambleas</p>
+                    <p className="text-[10px] text-charcoal/60">Abrir bot para Nodo: {activeCollectiveNode.value}</p>
                   </a>
                 </div>
 

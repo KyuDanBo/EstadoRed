@@ -141,6 +141,10 @@ service cloud.firestore {
       allow write: if isSignedIn() && isValidId(votoId);
     }
 
+    match /votaciones/{votacionId} {
+      allow read, write: if true;
+    }
+
     match /resultados_votaciones/{resultadoId} {
       allow read, list: if isSignedIn();
       allow write: if isSignedIn() && isValidId(resultadoId);

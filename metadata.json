@@ -1,0 +1,6 @@
+{
+  "name": "EstadoRed",
+  "description": "Una plataforma sociotecnológica y de gobernanza democrática en red, diseñada para la resiliencia cívica y la toma de decisiones soberanas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

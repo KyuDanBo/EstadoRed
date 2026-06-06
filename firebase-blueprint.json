@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in EstadoRed",
+      "type": "object",
+      "properties": {
+        "alias": { "type": "string" },
+        "rol": { "type": "string" },
+        "avatar": { "type": "string" },
+        "triada": {
+          "type": "object",
+          "properties": {
+            "territorio": { "type": "string" },
+            "ocupacion": { "type": "string" },
+            "ideologia": { "type": "string" }
+          }
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "xp": { "type": "number" },
+            "ip": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["alias"]
+    },
+    "Proposal": {
+      "title": "Proposal",
+      "description": "Citizen proposal in EstadoRed",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "alias": { "type": "string" },
+        "content": { "type": "string" },
+        "triada": {
+          "type": "object",
+          "properties": {
+            "territorio": { "type": "string" },
+            "ocupacion": { "type": "string" },
+            "ideologia": { "type": "string" }
+          }
+        },
+        "supportCount": { "type": "number" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "object" }
+      },
+      "required": ["userId", "content"]
+    },
+    "CollectiveNode": {
+      "title": "CollectiveNode",
+      "description": "A collective node corresponding to a triad element (territorio, ocupacion, ideologia)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["territorio", "ocupacion", "ideologia"] },
+        "memberCount": { "type": "number" },
+        "createdAt": { "type": "object" },
+        "telegramGroupUrl": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "memberCount"]
+    },
+    "PhysicalNodeRequest": {
+      "title": "PhysicalNodeRequest",
+      "description": "Petition for registering a new physical node, subject to administrator approval",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "address": { "type": "string" },
+        "coords": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "requestedBy": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "type", "address", "status", "userId"]
+    },
+    "TerritorialNetworkRequest": {
+      "title": "TerritorialNetworkRequest",
+      "description": "Petition for registering a new territorial network, subject to administrator approval",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "scope": { "type": "string" },
+        "address": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "requestedBy": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "scope", "status", "userId"]
+    },
+    "CitizenObservation": {
+      "title": "CitizenObservation",
+      "description": "Audit notes, observations or complaints published on networks and nodes",
+      "type": "object",
+      "properties": {
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["targetId", "targetName", "type", "description", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/proposals/{proposalId}": {
+      "schema": { "$ref": "#/entities/Proposal" },
+      "description": "Stores citizen proposals."
+    },
+    "/collective_nodes/{nodeId}": {
+      "schema": { "$ref": "#/entities/CollectiveNode" },
+      "description": "Stores collective nodes for territory, occupation, and ideology."
+    },
+    "/physical_node_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/PhysicalNodeRequest" },
+      "description": "Stores manual physical node creation requests waiting for admin approval."
+    },
+    "/territorial_network_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/TerritorialNetworkRequest" },
+      "description": "Stores territorial networks creation requests waiting for admin approval."
+    },
+    "/votos_presidenciales/{votoId}": {
+      "description": "Stores presidential votes and delegations."
+    },
+    "/resultados_votaciones/{resultadoId}": {
+      "description": "Stores real-time voting results for aggregated tallies."
+    },
+    "/citizen_observations/{obsId}": {
+      "schema": { "$ref": "#/entities/CitizenObservation" },
+      "description": "Stores real-time citizen-submitted monitoring observations on nodes and networks."
+    }
+  }
+}

@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Lora", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-sandbrown: #A06A42;
+  --color-sandbrown-dark: #81512F;
+  --color-sandbrown-light: #C39D80;
+  
+  --color-palmgreen: #2D5B3A;
+  --color-palmgreen-dark: #1F4228;
+  --color-palmgreen-light: #4A7A57;
+
+  --color-skyblue: #7CA7C5;
+  --color-skyblue-dark: #5784A3;
+  --color-skyblue-light: #A3C5DC;
+
+  --color-creambg: #F9F7F2;
+  --color-charcoal: #2B2927;
+  --color-brand-50: #f4f0e6;
+  --color-brand-100: #eadecd;
+  --color-brand-400: #c59873;
+  --color-brand-500: #a06a42;
+  --color-brand-600: #81512f;
+  --color-brand-900: #1f4228;
+
+  --color-warmgray: #ECE8DE;
+  --color-warmgray-dark: #DFD9CD;
+  --color-rust: #D05E3D;
+
+  --animate-pulse-ring: pulse-ring 2.5s infinite;
+  --animate-flicker: flicker 3s infinite ease-in-out;
+}
+
+/* Base style resets and beautiful organic textures */
+body {
+  background-color: #F9F7F2;
+  color: #2B2927;
+  font-family: var(--font-sans);
+  font-size: 0.95rem; /* Elegancia y proporción */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Reducción estética general de tamaños base */
+p, li, select, option, textarea, input {
+  font-size: 0.9rem;
+}
+
+/* Beautiful textured cream paper effect with organic grain */
+.paper-texture {
+  background-color: #F9F7F2;
+  background-image: 
+    radial-gradient(ellipse at 50% 50%, rgba(253, 252, 250, 0.45) 0%, rgba(246, 243, 235, 0.70) 100%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* Natural textured paper fiber visual details */
+.natural-border {
+  border-color: #ECE8DE;
+}
+
+/* River Stone Irregular Radii Shapes for "Organic Humanism" */
+.stone-radius-1 {
+  border-radius: 44% 56% 72% 28% / 48% 42% 58% 52%;
+}
+.stone-radius-2 {
+  border-radius: 68% 32% 54% 46% / 58% 44% 56% 42%;
+}
+.stone-radius-3 {
+  border-radius: 46% 54% 38% 62% / 44% 64% 36% 56%;
+}
+.stone-radius-4 {
+  border-radius: 38% 62% 58% 42% / 62% 38% 62% 38%;
+}
+
+/* Soft stone borders like river stones */
+.stone-btn {
+  border-radius: 20px 45px 30px 40px / 35px 25px 45px 30px;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.stone-btn:hover {
+  border-radius: 40px 20px 45px 30px / 30px 45px 25px 35px;
+}
+
+.stone-card {
+  border-radius: 42px 35px 48px 30px / 33px 45px 30px 42px;
+}
+
+.stone-pill {
+  border-radius: 48px 38px 52px 42px / 46px 54% 46% 54%;
+}
+
+.stone-input {
+  border-radius: 24px 18px 22px 20px / 18px 22px 18px 24px;
+}
+
+/* Scrollbar customization for cream theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F9F7F2;
+}
+::-webkit-scrollbar-thumb {
+  background: #ECE8DE;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #DFD9CD;
+}
+
+/* Pulse effects */
+@keyframes pulse-ring {
+  0% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(45, 91, 58, 0.4); }
+  70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(45, 91, 58, 0); }
+  100% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(45, 91, 58, 0); }
+}
+
+@keyframes flicker {
+  0%, 100% { transform: scale(1) rotate(-0.5deg); filter: drop-shadow(0 2px 4px rgba(43,41,39,0.04)); }
+  50% { transform: scale(1.02) rotate(0.5deg) translateY(-1px); filter: drop-shadow(0 4px 8px rgba(43,41,39,0.08)); }
+}

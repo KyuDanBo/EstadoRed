@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function isSignedIn() { return request.auth != null && request.auth.uid != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['alias', 'triada', 'stats', 'createdAt', 'rol', 'avatar']) &&
+             data.alias is string && data.alias.size() >= 1 && data.alias.size() <= 200 &&
+             data.rol is string && data.rol.size() <= 200 &&
+             data.avatar is string && data.avatar.size() <= 50 &&
+             data.triada is map && data.triada.keys().hasAll(['territorio', 'ocupacion', 'ideologia']) &&
+             data.triada.territorio is string && data.triada.territorio.size() <= 200 &&
+             data.triada.ocupacion is string && data.triada.ocupacion.size() <= 200 &&
+             data.triada.ideologia is string && data.triada.ideologia.size() <= 200 &&
+             data.stats is map && data.stats.keys().hasAll(['xp', 'ip']) &&
+             (data.stats.xp is number || data.stats.xp is int) &&
+             (data.stats.ip is number || data.stats.ip is int) &&
+             data.createdAt is timestamp &&
+              (data.keys().hasAll(['telegram']) ? (data.telegram is string && data.telegram.size() <= 200) : true) &&
+              (data.keys().hasAll(['accion_2']) ? (data.accion_2 is string && data.accion_2.size() <= 2000) : true);
+    }
+
+    function isValidProposal(data) {
+        return data.keys().hasAll(['userId', 'alias', 'content', 'triada', 'supportCount', 'status', 'timestamp']) &&
+           data.userId is string && data.userId.size() <= 128 &&
+           data.alias is string && data.alias.size() <= 200 &&
+           data.content is string && data.content.size() <= 2000 &&
+           data.triada is map && data.triada.keys().hasAll(['territorio', 'ocupacion', 'ideologia']) &&
+           data.triada.territorio is string && data.triada.territorio.size() <= 200 &&
+           data.triada.ocupacion is string && data.triada.ocupacion.size() <= 200 &&
+           data.triada.ideologia is string && data.triada.ideologia.size() <= 200 &&
+           (data.supportCount is number || data.supportCount is int) &&
+           data.status is string && data.status.size() <= 100 &&
+           data.timestamp is timestamp &&
+           (data.keys().hasAll(['level']) ? ((data.level is number || data.level is int) && data.level >= 1) : true);
+    }
+
+    function isValidCollectiveNode(data) {
+      return data.keys().hasAll(['id', 'name', 'type', 'memberCount', 'createdAt']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.type is string && (data.type == 'territorio' || data.type == 'ocupacion' || data.type == 'ideologia') &&
+             (data.memberCount is int || data.memberCount is number) &&
+             data.createdAt is timestamp &&
+             (data.keys().hasAll(['telegramGroupUrl']) ? (data.telegramGroupUrl is string && data.telegramGroupUrl.size() <= 500) : true);
+    }
+
+    function isValidPhysicalNodeRequest(data) {
+      return data.keys().hasAll(['name', 'type', 'address', 'coords', 'description', 'status', 'requestedBy', 'userId', 'createdAt']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.type is string && (data.type == 'territorial' || data.type == 'ocupacional' || data.type == 'ideologico') &&
+             data.address is string && data.address.size() <= 500 &&
+             data.coords is string && data.coords.size() <= 100 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.status is string && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected') &&
+             data.requestedBy is string && data.requestedBy.size() <= 200 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.createdAt is string;
+    }
+
+    function isValidTerritorialNetworkRequest(data) {
+      return data.keys().hasAll(['name', 'scope', 'address', 'description', 'status', 'requestedBy', 'userId', 'createdAt']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.scope is string && (data.scope == 'Departamental' || data.scope == 'Municipal') &&
+             data.address is string && data.address.size() <= 500 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.status is string && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected') &&
+             data.requestedBy is string && data.requestedBy.size() <= 200 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.createdAt is string;
+    }
+
+    match /config/{anyDoc} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && isValidUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
+        (userId == request.auth.uid && incoming().alias == existing().alias && incoming().createdAt == existing().createdAt) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['stats', 'telegram']) && incoming().stats.ip <= existing().stats.ip + 10 && incoming().stats.xp <= existing().stats.xp + 150)
+      );
+      allow delete: if isSignedIn() && (request.auth.token.email == 'daren.bo.lp@gmail.com' || request.auth.token.email == 'admin@estadored.app');
+    }
+    
+    match /proposals/{proposalId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(proposalId) && isValidProposal(incoming()) && incoming().userId == request.auth.uid && incoming().timestamp == request.time;
+      allow update: if isSignedIn() && isValidId(proposalId) && isValidProposal(incoming()) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['supportCount', 'level']) && incoming().supportCount == existing().supportCount + 1) ||
+        (existing().userId == request.auth.uid && incoming().userId == existing().userId && incoming().timestamp == existing().timestamp)
+      );
+      allow delete: if isSignedIn() && (request.auth.token.email == 'daren.bo.lp@gmail.com' || request.auth.token.email == 'admin@estadored.app');
+      
+      match /comentarios/{comentarioId} {
+        allow read, list: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+
+      match /supporters/{supporterId} {
+        allow get: if isSignedIn() && isValidId(supporterId);
+        allow list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(supporterId) && supporterId == request.auth.uid && existsAfter(/databases/$(database)/documents/proposals/$(proposalId));
+      }
+    }
+
+    match /collective_nodes/{nodeId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /physical_node_requests/{requestId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /territorial_network_requests/{requestId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /votos_presidenciales/{votoId} {
+      allow read: if isSignedIn() && isValidId(votoId);
+      allow list: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(votoId);
+    }
+
+    match /resultados_votaciones/{resultadoId} {
+      allow read: if isSignedIn() && isValidId(resultadoId);
+      allow write: if isSignedIn() && isValidId(resultadoId);
+    }
+
+    match /public_contracts/{contractId} {
+      allow read, list: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /courses/{courseId} {
+      allow read, list: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /networks/{netId} {
+      allow read, list: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /biblioteca_digital/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /biblioteca_chunks/{chunkId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /citizen_observations/{obsId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(obsId) && incoming().userId == request.auth.uid;
+      allow delete: if isSignedIn() && (request.auth.token.email == 'daren.bo.lp@gmail.com' || request.auth.token.email == 'admin@estadored.app');
+    }
+  }
+}

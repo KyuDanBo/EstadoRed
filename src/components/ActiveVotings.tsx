@@ -76,12 +76,18 @@ export default function ActiveVotings({ userProfile }: ActiveVotingsProps) {
         const qUsers = query(collection(db, "users"), limit(30));
         const dbUsers = await getDocs(qUsers);
         const users = dbUsers.docs
-          .filter(d => 
-             d.id !== auth.currentUser?.uid && 
-             !d.data().isAdmin && 
-             !(d.data().alias || '').toLowerCase().includes('admin') &&
-             !(d.data().alias || '').toLowerCase().includes('test')
-          )
+          .filter(d => {
+             const data = d.data();
+             const email = data.email || (data.real_data && data.real_data.email) || "";
+             const isAdminAcc = data.isAdmin === true || 
+                                data.rol === 'Admin' || 
+                                email === 'daren.bo.lp@gmail.com' || 
+                                email === 'admin@estadored.app' ||
+                                (data.alias || '').toLowerCase().includes('admin');
+             const isTestAcc = (data.alias || '').toLowerCase().includes('test') || 
+                               (data.alias || '').toLowerCase().includes('prueba');
+             return d.id !== auth.currentUser?.uid && !isAdminAcc && !isTestAcc;
+          })
           .slice(0, 10)
           .map(d => ({ 
             id: d.id, 

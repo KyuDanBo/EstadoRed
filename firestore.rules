@@ -1,8 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    match /{collectionPath}/{document=**} {
+      allow read, write: if request.auth != null && (request.auth.token.email == 'daren.bo.lp@gmail.com' || request.auth.token.email == 'admin@estadored.app');
     }
 
     function isValidId(id) {
@@ -142,7 +142,7 @@ service cloud.firestore {
     }
 
     match /resultados_votaciones/{resultadoId} {
-      allow read: if isSignedIn() && isValidId(resultadoId);
+      allow read, list: if isSignedIn();
       allow write: if isSignedIn() && isValidId(resultadoId);
     }
 

@@ -6,7 +6,7 @@ import {
   Shield, Zap, Target, Book, Menu, X,
   Settings, User, MapPin, 
   ChevronRight, Activity, Award, ArrowRight, LogOut, MessageSquare, CheckCircle, MessageCircle,
-  Search, BookOpen, Sparkles, Lock, Network, Copy, ExternalLink, Globe
+  Search, BookOpen, Sparkles, Lock, Network, Copy, ExternalLink, Globe, AlertTriangle, Info
 } from 'lucide-react';
 import ProposalFeed from './ProposalFeed';
 import MyProposals from './MyProposals';

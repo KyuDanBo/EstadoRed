@@ -10,6 +10,8 @@ service cloud.firestore {
     }
     
     function isSignedIn() { return request.auth != null && request.auth.uid != null; }
+    function isTestUser() { return request.auth != null && request.auth.token.email == 'prueba@estadored.app'; }
+    function canWrite() { return isSignedIn() && !isTestUser(); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
 
@@ -82,7 +84,7 @@ service cloud.firestore {
 
     match /config/{anyDoc} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /test/connection {
@@ -91,8 +93,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && isValidUser(incoming()) && incoming().createdAt == request.time;
-      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
+      allow create: if canWrite() && isValidId(userId) && userId == request.auth.uid && isValidUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if canWrite() && isValidId(userId) && isValidUser(incoming()) && (
         (userId == request.auth.uid && incoming().alias == existing().alias && incoming().createdAt == existing().createdAt) ||
         (incoming().diff(existing()).affectedKeys().hasOnly(['stats', 'telegram']) && incoming().stats.ip <= existing().stats.ip + 10 && incoming().stats.xp <= existing().stats.xp + 150)
       );
@@ -101,8 +103,8 @@ service cloud.firestore {
     
     match /proposals/{proposalId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(proposalId) && isValidProposal(incoming()) && incoming().userId == request.auth.uid && incoming().timestamp == request.time;
-      allow update: if isSignedIn() && isValidId(proposalId) && isValidProposal(incoming()) && (
+      allow create: if canWrite() && isValidId(proposalId) && isValidProposal(incoming()) && incoming().userId == request.auth.uid && incoming().timestamp == request.time;
+      allow update: if canWrite() && isValidId(proposalId) && isValidProposal(incoming()) && (
         (incoming().diff(existing()).affectedKeys().hasOnly(['supportCount', 'level']) && incoming().supportCount == existing().supportCount + 1) ||
         (existing().userId == request.auth.uid && incoming().userId == existing().userId && incoming().timestamp == existing().timestamp)
       );
@@ -110,35 +112,35 @@ service cloud.firestore {
       
       match /comentarios/{comentarioId} {
         allow read, list: if isSignedIn();
-        allow write: if isSignedIn();
+        allow write: if canWrite();
       }
 
       match /supporters/{supporterId} {
         allow get: if isSignedIn() && isValidId(supporterId);
         allow list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(supporterId) && supporterId == request.auth.uid && existsAfter(/databases/$(database)/documents/proposals/$(proposalId));
+        allow create: if canWrite() && isValidId(supporterId) && supporterId == request.auth.uid && existsAfter(/databases/$(database)/documents/proposals/$(proposalId));
       }
     }
 
     match /collective_nodes/{nodeId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /physical_node_requests/{requestId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /territorial_network_requests/{requestId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /votos_presidenciales/{votoId} {
       allow read: if isSignedIn() && isValidId(votoId);
       allow list: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(votoId);
+      allow write: if canWrite() && isValidId(votoId);
     }
 
     match /votaciones/{votacionId} {
@@ -147,37 +149,37 @@ service cloud.firestore {
 
     match /resultados_votaciones/{resultadoId} {
       allow read, list: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(resultadoId);
+      allow write: if canWrite() && isValidId(resultadoId);
     }
 
     match /public_contracts/{contractId} {
       allow read, list: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /courses/{courseId} {
       allow read, list: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /networks/{netId} {
       allow read, list: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /biblioteca_digital/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /biblioteca_chunks/{chunkId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if canWrite();
     }
 
     match /citizen_observations/{obsId} {
       allow read, list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(obsId) && incoming().userId == request.auth.uid;
+      allow create: if canWrite() && isValidId(obsId) && incoming().userId == request.auth.uid;
       allow delete: if isSignedIn() && (request.auth.token.email == 'daren.bo.lp@gmail.com' || request.auth.token.email == 'admin@estadored.app');
     }
   }

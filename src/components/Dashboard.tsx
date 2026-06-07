@@ -6,8 +6,8 @@ import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { 
   Shield, Zap, Target, Book, Menu, X,
   Settings, User, MapPin, 
-  ChevronRight, Activity, Award, ArrowRight, LogOut, MessageSquare, CheckCircle, MessageCircle,
-  Search, BookOpen, Sparkles, Lock, Network, Copy, ExternalLink, Globe, AlertTriangle, Info
+  ChevronRight, ChevronDown, Activity, Award, ArrowRight, LogOut, MessageSquare, CheckCircle, MessageCircle,
+  Search, BookOpen, Sparkles, Lock, Network, Copy, ExternalLink, Globe, AlertTriangle, Info, Lightbulb, FileText
 } from 'lucide-react';
 import ProposalFeed from './ProposalFeed';
 import MyProposals from './MyProposals';
@@ -17,6 +17,7 @@ import ActiveVotings from './ActiveVotings';
 import AdminView from './AdminView';
 import EstructuraSistema from './EstructuraSistema';
 import CitizenComplaints from './CitizenComplaints';
+import EstatutoInfographic from './EstatutoInfographic';
 import { calculateGamification } from '../lib/gamification';
 import { BibliotecaDigital } from './BibliotecaDigital';
 
@@ -141,6 +142,17 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
 
   const { currentXP, currentIP, level, title, maxXP, maxIP } = calculateGamification(userProfile);
   
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    identidad: true,
+    territorio: true,
+    control: true,
+    conocimiento: true
+  });
+
+  const toggleGroup = (group: string) => {
+    setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && auth.currentUser) {
@@ -648,68 +660,89 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
         {/* MENÚ DE SECCIONES PRINCIPALES */}
         <div className="space-y-1.5 pb-20">
           
-          <div className="mb-4">
-            <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Atención Continua</p>
-            <a 
-              href={`https://t.me/EstadoRedBot?start=asesor_personal`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center justify-between bg-skyblue/10 text-skyblue-dark hover:bg-skyblue/20 border border-skyblue/25 mb-2 group"
-            >
-              <div className="flex items-center gap-3">
-                <Zap className="w-4 h-4 animate-pulse" /> <span>IAsesor Personal</span>
+          <div className="mb-4 relative">
+            <button onClick={() => toggleGroup('identidad')} className="w-full text-left px-1 mb-1.5 cursor-pointer">
+              <span className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 hover:text-charcoal/70 transition-colors">Mi Identidad</span>
+            </button>
+            {expandedGroups.identidad && (
+              <div className="space-y-1 animate-in slide-in-from-top-2">
+                <button onClick={() => switchTab('identidad')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'identidad' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <User className="w-3.5 h-3.5" /> Mi Ficha
+                </button>
+                <button onClick={() => switchTab('insignias')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'insignias' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <Award className="w-3.5 h-3.5" /> Mis Insignias
+                </button>
+                <button onClick={() => switchTab('iniciativas')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'iniciativas' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <Lightbulb className="w-3.5 h-3.5" /> Mis Iniciativas
+                </button>
+                <button onClick={() => switchTab('editor_propuesta')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'editor_propuesta' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <FileText className="w-3.5 h-3.5" /> Visión de País
+                </button>
               </div>
-              <ExternalLink className="w-3 h-3 text-skyblue opacity-50 group-hover:opacity-100" />
-            </a>
+            )}
           </div>
 
-          <div className="mb-4">
-            <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Mi Identidad</p>
-            <button onClick={() => switchTab('identidad')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'identidad' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <User className="w-4 h-4" /> <span>Mi Ficha</span>
+          <div className="mb-4 relative">
+            <button onClick={() => toggleGroup('territorio')} className="w-full text-left px-1 mb-1.5 cursor-pointer">
+              <span className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 hover:text-charcoal/70 transition-colors">Redes Territoriales</span>
             </button>
-            <button onClick={() => switchTab('insignias')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'insignias' ? 'bg-[#A06A42]/10 text-[#A06A42] border-[#A06A42]/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <Award className="w-4 h-4 text-amber-500 hover:animate-pulse" /> <span>Mis Insignias</span>
-            </button>
-            <button onClick={() => switchTab('iniciativas')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'iniciativas' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <Sparkles className="w-4 h-4 text-palmgreen" /> <span>Mis Iniciativas</span>
-            </button>
-            <button onClick={() => switchTab('editor_propuesta')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'editor_propuesta' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <BookOpen className="w-4 h-4 text-purple-600" /> <span>Visión de País</span>
-            </button>
+            {expandedGroups.territorio && (
+              <div className="space-y-1 animate-in slide-in-from-top-2">
+                <button onClick={() => switchTab('delegacion')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'delegacion' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <Network className="w-3.5 h-3.5" /> Estructura de Red
+                </button>
+                <button onClick={() => switchTab('nodos_fisicos')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'nodos_fisicos' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <MapPin className="w-3.5 h-3.5" /> Nodos Físicos
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="mb-4">
-            <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Redes Territoriales</p>
-            <button onClick={() => switchTab('delegacion')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'delegacion' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <Network className="w-4 h-4 text-skyblue" /> <span>Estructura de Red</span>
+          <div className="mb-4 relative">
+            <button onClick={() => toggleGroup('control')} className="w-full text-left px-1 mb-1.5 cursor-pointer">
+              <span className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 hover:text-charcoal/70 transition-colors">Control Social</span>
             </button>
-            <button onClick={() => switchTab('nodos_fisicos')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'nodos_fisicos' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <MapPin className="w-4 h-4 text-sandbrown" /> <span>Nodos Físicos</span>
-            </button>
+            {expandedGroups.control && (
+              <div className="space-y-1 animate-in slide-in-from-top-2">
+                <button onClick={() => switchTab('fiscalizacion')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'fiscalizacion' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <Shield className="w-3.5 h-3.5" /> Fiscalización
+                </button>
+                <button onClick={() => switchTab('denuncias')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'denuncias' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <AlertTriangle className="w-3.5 h-3.5" /> Denuncia Ciudadana
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="mb-4">
-            <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Control Social</p>
-            <button onClick={() => switchTab('fiscalizacion')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'fiscalizacion' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <Shield className="w-4 h-4" /> <span>Fiscalización</span>
+          <div className="mb-4 relative">
+            <button onClick={() => toggleGroup('conocimiento')} className="w-full text-left px-1 mb-1.5 cursor-pointer">
+              <span className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 hover:text-charcoal/70 transition-colors">Más Conocimiento</span>
             </button>
-            <button onClick={() => switchTab('denuncias')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'denuncias' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <AlertTriangle className="w-4 h-4 text-red-500" /> <span>Denuncia Ciudadana</span>
-            </button>
-          </div>
+            {expandedGroups.conocimiento && (
+              <div className="space-y-1 animate-in slide-in-from-top-2">
+                <a 
+                  href={`https://t.me/EstadoRedBoBot?start=asesor_personal`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center justify-between bg-skyblue/10 text-skyblue-dark hover:bg-skyblue/20 border border-skyblue/25 mb-1 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Zap className="w-3.5 h-3.5 animate-pulse" /> IAsesor Personal
+                  </div>
+                  <ExternalLink className="w-3 h-3 text-skyblue opacity-50 group-hover:opacity-100" />
+                </a>
 
-          <div className="mb-4">
-            <p className="text-[8.5px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2 px-1">Más Conocimiento</p>
-            <button onClick={() => switchTab('cursos')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'cursos' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <BookOpen className="w-4 h-4 text-charcoal" /> <span>Academia Cívica</span>
-            </button>
-            <button onClick={() => switchTab('biblioteca')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'biblioteca' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <Book className="w-4 h-4 text-sandbrown" /> <span>Biblioteca Digital</span>
-            </button>
-            <button onClick={() => switchTab('que_es')} className={`w-full text-left px-4 py-2.5 rounded-xl transition duration-200 text-xs font-bold uppercase tracking-wider flex items-center gap-3 select-none cursor-pointer border ${activeTab === 'que_es' ? 'bg-[#A06A42]/10 text-sandbrown border-sandbrown/20' : 'bg-transparent text-charcoal/70 hover:bg-warmgray/35 border-transparent'}`}>
-              <Info className="w-4 h-4 text-skyblue" /> <span>¿Qué es EstadoRed?</span>
-            </button>
+                <button onClick={() => switchTab('cursos')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'cursos' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <BookOpen className="w-3.5 h-3.5" /> Academia Cívica
+                </button>
+                <button onClick={() => switchTab('biblioteca')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'biblioteca' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <Book className="w-3.5 h-3.5" /> Biblioteca Digital
+                </button>
+                <button onClick={() => switchTab('que_es')} className={`w-full text-left px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition flex items-center gap-3 ${activeTab === 'que_es' ? 'text-sandbrown bg-[#A06A42]/10 border border-[#A06A42]/20' : 'text-charcoal/70 hover:bg-warmgray/35 border border-transparent'}`}>
+                  <Info className="w-3.5 h-3.5" /> ¿Qué es EstadoRed?
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="pt-2 border-t border-[#ECE8DE]">
@@ -1187,7 +1220,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
               VISTA 2: BUSCAR NODOS COLECTIVOS
               ========================================= */}
           {activeTab === 'votaciones' && (
-            <ActiveVotings />
+            <ActiveVotings userProfile={userProfile} />
           )}
           {activeTab === 'buscar_nodos' && (
             <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
@@ -1630,6 +1663,38 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
               ========================================= */}
           {activeTab === 'estructura_sistema' && (
             <EstructuraSistema userProfile={userProfile} />
+          )}
+
+          {/* =========================================
+              VISTA: QUÉ ES ESTADORED
+              ========================================= */}
+          {activeTab === 'que_es' && (
+            <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+              <div className="bg-white border border-[#ECE8DE] rounded-3xl p-6 md:p-10 shadow-xs relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-sandbrown-light/10 rounded-full blur-l -z-10"></div>
+                <div className="max-w-2xl">
+                  <div className="mb-6">
+                    <span className="inline-block text-[10.5px] font-bold tracking-[0.2em] text-sandbrown border border-sandbrown/20 bg-sandbrown/5 px-4 py-1.5 rounded-full uppercase shadow-sm">
+                      Soberanía de Red Funcional
+                    </span>
+                  </div>
+                  <h1 className="font-serif font-black text-3xl md:text-4xl text-charcoal tracking-tight leading-tight mb-5">
+                    ¿Qué es EstadoRed?
+                  </h1>
+                  <div className="h-[2px] w-12 bg-palmgreen opacity-70 rounded-full mb-8"></div>
+                  
+                  <div className="text-sm md:text-[15px] text-charcoal/85 space-y-4 leading-relaxed font-serif pt-2">
+                    <p>
+                      EstadoRed surge frente al colapso del sistema representativo tradicional. En lugar de depender de partidos políticos que fragmentan la sociedad boliviana, proponemos una soberanía de red funcional basada en intereses y competencias directas de cada ciudadano.
+                    </p>
+                    <p>
+                      Sustituimos la polarización política tradicional y la violencia de los bloqueos sectoriales por la fuerza del consenso digital transparente, auditado e incorruptible a través de nuestra triada natural civil: Territorio, Ocupación e Ideología.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <EstatutoInfographic />
+            </div>
           )}
 
           {/* =========================================
@@ -2165,7 +2230,7 @@ export default function Dashboard({ respuestas }: { respuestas: Record<string, s
                   </a>
 
                   <a 
-                    href={`https://t.me/EstadoRedBot?start=nodo_${activeCollectiveNode.value.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
+                    href={`https://t.me/EstadoRedBoBot?start=nodo_${activeCollectiveNode.value.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="w-full bg-[#0088cc]/5 hover:bg-[#0088cc]/10 border border-[#0088cc]/15 rounded-2xl p-3.5 transition-all text-xs flex flex-col gap-1 text-left decoration-transparent group"

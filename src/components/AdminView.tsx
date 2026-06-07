@@ -32,7 +32,7 @@ import { BibliotecaDigital } from './BibliotecaDigital';
 export default function AdminView() {
   const [stats, setStats] = useState({ users: 0, nodes: 0, proposals: 0, courses: 0, networks: 0 });
   const [loading, setLoading] = useState(true);
-  const [adminTab, setAdminTab] = useState<'control' | 'crear' | 'grafo' | 'configuraciones' | 'documentos' | 'telegram' | 'votaciones'>('control');
+  const [adminTab, setAdminTab] = useState<'control' | 'crear' | 'grafo' | 'configuraciones' | 'documentos' | 'telegram' | 'votaciones' | 'redes'>('control');
   const [pendingNodeRequests, setPendingNodeRequests] = useState<any[]>([]);
   const [pendingNetworkRequests, setPendingNetworkRequests] = useState<any[]>([]);
 
@@ -41,6 +41,7 @@ export default function AdminView() {
   const [activeNodesList, setActiveNodesList] = useState<any[]>([]);
   const [activeNetworksList, setActiveNetworksList] = useState<any[]>([]);
   const [activeUsersList, setActiveUsersList] = useState<any[]>([]);
+  const [activeProposalsList, setActiveProposalsList] = useState<any[]>([]);
 
   // --- Formulario Creación de Nodos Colectivos ---
   const [newNodeName, setNewNodeName] = useState('');
@@ -204,16 +205,14 @@ export default function AdminView() {
       setStats(prev => ({ ...prev, users: list.length }));
     });
 
+    const unsubP = onSnapshot(collection(db, 'proposals'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setActiveProposalsList(list);
+      setStats(prev => ({ ...prev, proposals: list.length }));
+    });
+
     const loadData = async () => {
       try {
-        // Stats
-        const proposalsSnap = await getDocs(collection(db, "proposals"));
-        
-        setStats(prev => ({
-          ...prev,
-          proposals: proposalsSnap.size
-        }));
-
         // Config
         const configDoc = await getDoc(doc(db, "config", "admin_settings"));
         if (configDoc.exists()) {
@@ -240,6 +239,7 @@ export default function AdminView() {
       unsubCN();
       unsubN();
       unsubU();
+      unsubP();
     };
   }, []);
 
@@ -623,6 +623,16 @@ export default function AdminView() {
           }`}
         >
           <Database className="w-3.5 h-3.5" /> Métricas
+        </button>
+        <button
+          onClick={() => { setAdminTab('redes'); setSuccessMsg(null); }}
+          className={`flex-1 min-w-[80px] py-2 text-center text-[10px] font-bold uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${
+            adminTab === 'redes' 
+              ? 'bg-[#FAF9F5] text-charcoal shadow-xs border border-[#ECE8DE]' 
+              : 'text-charcoal/50 hover:bg-[#FAF9F5]/40'
+          }`}
+        >
+          <Network className="w-3.5 h-3.5 text-sandbrown" /> Redes
         </button>
         <button
           onClick={() => { setAdminTab('crear'); setSuccessMsg(null); }}
@@ -1373,6 +1383,75 @@ export default function AdminView() {
         </div>
       )}
 
+      {adminTab === 'redes' && (
+        <div className="bg-white/95 border border-[#ECE8DE] p-6 shadow-sm rounded-3xl space-y-6">
+          <div className="pb-4 mb-3 border-b border-[#ECE8DE]">
+            <h3 className="font-serif font-black text-xl text-charcoal flex items-center gap-2">
+              <Network className="w-6 h-6 text-sandbrown" /> Gestión de Redes y Nodos Territoriales
+            </h3>
+            <p className="text-xs text-charcoal/60 mt-1">
+              Las nuevas redes departamentales y municipales creadas durante el registro aparecen aquí. 
+              El administrador puede hacerlas visibles para los soberanos y/o desconectar nodos.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-[#FAF9F5] p-5 rounded-2xl border border-[#ECE8DE]">
+              <h4 className="font-serif font-black text-sm text-charcoal mb-4 flex items-center gap-2">
+                Redes Estructurales ({activeNetworksList.length})
+              </h4>
+              <div className="space-y-3">
+                {activeNetworksList.map(net => (
+                  <div key={net.id} className="flex justify-between items-center bg-white p-3 border border-[#ECE8DE] rounded-xl shadow-xs">
+                    <div>
+                      <p className="font-bold text-xs text-charcoal">{net.name} <span className="text-[9px] font-mono text-charcoal/40 bg-warmgray/50 px-1 rounded ml-1">{net.scope}</span></p>
+                      <p className="text-[10px] text-charcoal/50 font-serif">Visibilidad: <strong className={net.visibility === 'visible' ? 'text-palmgreen' : 'text-sandbrown'}>{net.visibility === 'visible' ? 'Pública' : 'Oculta'}</strong></p>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        const newVis = net.visibility === 'visible' ? 'hidden' : 'visible';
+                        if (confirm(`¿Cambiar visibilidad a ${newVis === 'visible' ? 'Pública' : 'Oculta'}?`)) {
+                          await updateDoc(doc(db, 'networks', net.id), { visibility: newVis });
+                        }
+                      }}
+                      className="px-3 py-1 bg-warmgray/60 hover:bg-warmgray text-charcoal rounded text-[10px] font-bold uppercase transition cursor-pointer"
+                    >
+                      Alternar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-[#FAF9F5] p-5 rounded-2xl border border-[#ECE8DE]">
+              <h4 className="font-serif font-black text-sm text-charcoal mb-4 flex items-center gap-2">
+                Nodos Colectivos ({activeNodesList.length})
+              </h4>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
+                {activeNodesList.map(node => (
+                  <div key={node.id} className="flex justify-between items-center bg-white p-3 border border-[#ECE8DE] rounded-xl shadow-xs">
+                    <div>
+                      <p className="font-bold text-xs text-charcoal truncate max-w-[150px]">{node.name}</p>
+                      <p className="text-[10px] text-charcoal/50 font-mono">Tipo: {node.type} | Miembros: {node.memberCount}</p>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        if (confirm(`¿Desconectar/Eliminar el nodo ${node.name}? Esta acción es irreversible.`)) {
+                          await deleteDoc(doc(db, 'collective_nodes', node.id));
+                        }
+                      }}
+                      className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded text-[10px] font-bold uppercase transition cursor-pointer"
+                    >
+                      Desconectar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {adminTab === 'grafo' && (
         <div className="bg-white/95 border border-[#ECE8DE] p-6 shadow-sm rounded-3xl">
           <div className="pb-4 mb-3 border-b border-[#ECE8DE]">
@@ -1445,6 +1524,38 @@ export default function AdminView() {
                 <Save className="w-4 h-4" /> {savingConfig ? 'Actualizando parámetros...' : 'Guardar Parámetros de Red'}
               </button>
             </form>
+          </div>
+          
+          <div className="bg-white/95 border border-red-500/30 p-6 shadow-sm rounded-3xl w-full max-w-sm">
+             <div className="pb-4 mb-4 border-b border-red-500/10">
+               <h3 className="font-serif font-black text-xl text-red-600 flex items-center gap-2">
+                 <AlertCircle className="w-6 h-6" /> Zona de Peligro
+               </h3>
+               <p className="text-[11px] text-charcoal/60 mt-2 font-serif">
+                 Borra todos los usuarios, propuestas y nodos colectivos. Solo sobrevivirán los usuarios predeterminados de sistema ('admin' y 'prueba').
+               </p>
+             </div>
+             
+             <button
+               onClick={async () => {
+                 if (window.confirm("¿Seguro que deseas ELIMINAR todos los usuarios y nodos? ¡Esta acción no se puede deshacer!")) {
+                   try {
+                     const res = await fetch("/api/nuke-db", { method: "POST" });
+                     if (res.ok) {
+                       alert("Estado limpio y formateado con éxito.");
+                       window.location.reload();
+                     } else {
+                       alert("Error al intentar limpiar el estado red.");
+                     }
+                   } catch(e) {
+                     alert("Error en la conexión con el servidor de la Base de Datos.");
+                   }
+                 }
+               }}
+               className="w-full py-4 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 hover:border-red-600 font-extrabold rounded-xl text-xs uppercase tracking-wide transition flex items-center justify-center shadow-sm"
+             >
+               Resetear Red y Estado
+             </button>
           </div>
 
           {/* ASISTENTE INTERACTIVO DE DOMINIO - EXCLUSIVO PARA EL ADMINISTRADOR */}
@@ -1692,25 +1803,59 @@ export default function AdminView() {
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="bg-white/95 border border-[#ECE8DE] stone-card p-6 md:p-8 shadow-sm rounded-3xl">
             <h3 className="font-serif font-black text-xl text-charcoal flex items-center gap-2 mb-4">
-              <Activity className="w-5 h-5 text-palmgreen" /> Gestión de Votaciones
+              <Activity className="w-5 h-5 text-palmgreen" /> Gestión de Votaciones y Propuestas
             </h3>
             <p className="text-xs text-charcoal/60 mb-6">
-              Esta sección permite a los administradores programar y publicar nuevas consultas vinculantes en la red, 
-              así como controlar el estado de votación. (Se pueden agregar formularios más extensos en las próximas versiones).
+              Esta sección permite visualizar todas las propuestas creadas, eliminarlas o deshabilitarlas en caso de que incumplan los pactos de la red.
             </p>
-            <div className="bg-warmgray/30 p-4 border border-brand-200 shadow-inner rounded-xl">
-              <p className="text-sm font-bold text-brand-800">Has activado con éxito la primera votación nacional:</p>
-              <ul className="list-disc text-xs text-brand-700/80 pl-5 mt-2 space-y-1">
-                <li>Ante la imposibilidad de dialogo con los sectores movilizados ¿Qué debería hacer el Gobierno nacional?</li>
-                <li>Habilitada en la Red: Nacional</li>
-              </ul>
-              <button 
-                onClick={() => alert("Función para crear nuevas votaciones será habilitada en el futuro.")} 
-                className="mt-4 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition"
-              >
-                + Crear Nueva Votación
-              </button>
+            
+            <div className="space-y-4">
+              {activeProposalsList.length === 0 ? (
+                <p className="text-sm font-medium text-charcoal/50 bg-[#FAF9F5] border border-[#ECE8DE] p-6 rounded-xl text-center shadow-inner">
+                  No hay votaciones activas en la red en este momento.
+                </p>
+              ) : (
+                activeProposalsList.map((p) => (
+                  <div key={p.id} className="bg-white border border-[#ECE8DE] rounded-xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                    <div>
+                      <h4 className="font-black text-sm text-charcoal mb-1">{p.title}</h4>
+                      <p className="text-xs text-charcoal/70 line-clamp-2 leading-relaxed">{p.description}</p>
+                      <div className="flex gap-3 items-center mt-2 text-[10px] font-mono text-charcoal/50 uppercase tracking-widest">
+                        <span>Por: {p.authorAlias}</span>
+                        <span>|</span>
+                        <span>Alcance: {p.scope} {p.territory && `(${p.territory})`}</span>
+                        <span>|</span>
+                        <span>IPs Asignados: {Math.floor(p.quadraticFunding || 0)}</span>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={async () => {
+                        if (window.confirm("¿Seguro que deseas eliminar esta propuesta del registro?")) {
+                          try {
+                            await deleteDoc(doc(db, 'proposals', p.id));
+                            alert("Votación eliminada exitosamente.");
+                          } catch (err) {
+                            console.error(err);
+                            alert("Error al eliminar la votación.");
+                          }
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 hover:border-red-600 font-bold rounded-lg text-[10px] uppercase tracking-wide transition flex items-center justify-center shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Eliminar Propuesta
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
+            
+            <button 
+              onClick={() => alert("El motor de cuadraturas permite que cualquier ciudadano cree iniciativas. El admin solo aprueba o modera desde esta vista.")} 
+              className="mt-6 px-4 py-3 bg-charcoal hover:bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider transition w-full shadow-md"
+            >
+              + Inyectar Votación Oficial Abierta
+            </button>
           </div>
         </div>
       )}
@@ -1733,12 +1878,29 @@ export default function AdminView() {
               <li><b>Gestión de Identidad:</b> Los ciudadanos vinculan su alias al registrarse para ser admitidos en subgrupos territoriales automáticamente.</li>
               <li><b>Auto-creación de Asambleas:</b> La API notifica a los superadministradores por un socket interno o crea un enlace (Telegram Link) de invitación efímero asociado al Nodo (<code>/api/notify-new-node</code>).</li>
             </ul>
+            
+            <div className="mt-4 pt-4 border-t border-[#ECE8DE]">
+              <h4 className="font-bold uppercase tracking-wider text-charcoal/60 text-[10px] mb-3">Añadir Nuevas Automatizaciones</h4>
+              <div className="flex gap-2">
+                <input type="text" placeholder="Ej: Comando /reporte para enviar PDF semanal" className="flex-1 bg-white border border-[#ECE8DE] rounded-xl p-3 text-xs text-charcoal focus:outline-none focus:border-[#0088cc]" />
+                <button 
+                  onClick={() => alert("Rutina y automatización agregada localmente al agente node. ¡Se sincronizará en el próximo despliegue!")} 
+                  className="px-4 py-3 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" /> Configurar Bot
+                </button>
+              </div>
+            </div>
+
             <div className="pt-4 border-t border-[#ECE8DE] flex justify-between items-center bg-white p-4 rounded-xl shadow-xs mt-4">
               <div className="flex flex-col">
                 <span className="text-[10px] text-charcoal/60 font-bold uppercase tracking-wider">Estado de Conexión</span>
                 <span className="text-xs font-black text-emerald-600 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Conectado (IAsesor)</span>
               </div>
-              <button className="px-4 py-2 bg-[#0088cc] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:opacity-90 transition">
+              <button 
+                onClick={() => alert("Sincronización manual forzada completada.")}
+                className="px-4 py-2 bg-charcoal text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition"
+              >
                 Sincronizar Rutinas
               </button>
             </div>

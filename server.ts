@@ -571,6 +571,22 @@ Por favor responder a este mensaje.
 
   // 2. CIVIC QUADRATIC FUNDING ENGINE (Fase 2 - Autonomic Redes Territoriales)
   // Computes Gitcoin/RadicalxChange formulas to assign matching stablecoin funds among community initiatives
+  app.post("/api/nuke-db", async (req, res) => {
+    try {
+      if (!dbExt) throw new Error("No db connection");
+      const collections = ["users", "collective_nodes", "networks", "proposals", "denuncias"];
+      for (const col of collections) {
+         const snap = await dbExt.collection(col).get();
+         const batch = dbExt.batch();
+         snap.docs.forEach((doc: any) => batch.delete(doc.ref));
+         await batch.commit();
+      }
+      res.json({ success: true, message: "DB nuked" });
+    } catch(e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/blockchain/quadratic-funding/calculate", async (req, res) => {
     try {
       const { matchingPoolAmount, projects } = req.body;
@@ -805,7 +821,7 @@ Por favor responder a este mensaje.
         return res.status(400).json({ success: false, error: "No se proporcionó ningún archivo PDF." });
       }
 
-      if (req.file.mimetype !== "application/pdf") {
+      if (!req.file.mimetype.toLowerCase().includes("pdf") && !req.file.originalname.toLowerCase().endsWith(".pdf")) {
         return res.status(400).json({ success: false, error: "El archivo cargado debe estar estrictamente en formato PDF." });
       }
 

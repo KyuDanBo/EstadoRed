@@ -26,14 +26,34 @@ export default function ActiveVotings({ userProfile }: ActiveVotingsProps) {
   const [loadingBusqueda, setLoadingBusqueda] = useState<boolean>(false);
 
   useEffect(() => {
+    // Offline mockup array injected to votings if needed
+    const offlineMockup = [
+      {
+        id: "mockup_1",
+        level: "Nacional",
+        status: "activa",
+        title: "¿Qué debería hacer el Gobierno nacional?",
+        context: "Ante la imposibilidad de diálogo con los sectores movilizados.",
+        options: [
+          { id: "opcion_1", label: "Convocar a Referéndum revocatorio." },
+          { id: "opcion_2", label: "Dictar Estado de Excepción." },
+          { id: "opcion_3", label: "Renunciar." }
+        ]
+      }
+    ];
+
     // Escuchar votaciones activas desde Firebase
     const qVotaciones = query(collection(db, 'votaciones'), where('status', '==', 'activa'));
     const unsub = onSnapshot(qVotaciones, (snap) => {
       if (!snap.empty) {
         setVotings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } else {
-        setVotings([]);
+        setVotings(offlineMockup);
       }
+      setLoadingSuper(false);
+    }, (error) => {
+      console.warn("Could not fetch active votings from network, falling back to local mockup", error);
+      setVotings(offlineMockup);
       setLoadingSuper(false);
     });
     return () => unsub();
@@ -118,27 +138,26 @@ export default function ActiveVotings({ userProfile }: ActiveVotingsProps) {
     const votingId = currentVoting.id;
 
     try {
-      await setDoc(doc(db, "votos_presidenciales", `${auth.currentUser.uid}_${votingId}`), {
-        voto: opcionSeleccionada,
-        type: 'directo',
-        timestamp: new Date().toISOString()
-      });
+        await setDoc(doc(db, "votos_presidenciales", `${auth.currentUser.uid}_${votingId}`), {
+          voto: opcionSeleccionada,
+          type: 'directo',
+          timestamp: new Date().toISOString()
+        });
 
-      const resDoc = doc(db, "resultados_votaciones", votingId);
-      const snap = await getDoc(resDoc);
-      if (!snap.exists()) {
-        await setDoc(resDoc, {
-          opcion_1: opcionSeleccionada === 'opcion_1' ? 1 : 0,
-          opcion_2: opcionSeleccionada === 'opcion_2' ? 1 : 0,
-          opcion_3: opcionSeleccionada === 'opcion_3' ? 1 : 0,
-          total: 1
-        });
-      } else {
-        await updateDoc(resDoc, {
-          [opcionSeleccionada]: (snap.data()[opcionSeleccionada] || 0) + 1,
-          total: (snap.data().total || 0) + 1
-        });
-      }
+        const resDoc = doc(db, "resultados_votaciones", votingId);
+        const snap = await getDoc(resDoc);
+        if (!snap.exists()) {
+          const newTotals: Record<string, number> = { total: 1 };
+          currentVoting.options.forEach((o: any) => {
+             newTotals[o.id] = (opcionSeleccionada === o.id) ? 1 : 0;
+          });
+          await setDoc(resDoc, newTotals);
+        } else {
+          await updateDoc(resDoc, {
+            [opcionSeleccionada]: (snap.data()[opcionSeleccionada] || 0) + 1,
+            total: (snap.data().total || 0) + 1
+          });
+        }
 
       setVotosUsuario(prev => ({ ...prev, [votingId]: { voto: opcionSeleccionada, type: 'directo' } }));
     } catch(err) {
@@ -298,8 +317,8 @@ export default function ActiveVotings({ userProfile }: ActiveVotingsProps) {
                   return (
                     <div key={o.id} className="relative w-full text-left">
                       <div className="flex justify-between text-xs mb-1 relative z-10 px-2 font-bold font-serif text-brand-900">
-                        <span>{o.label} {esElegida && " (Tú)"}</span>
-                        <span>{val} votos ({pct}%)</span>
+                        <span className="truncate pr-4">{o.label} {esElegida && " (Tú)"}</span>
+                        <span className="shrink-0">{val} votos ({pct}%)</span>
                       </div>
                       <div className="w-full bg-white/60 h-2.5 rounded-full overflow-hidden shadow-inner border border-brand-200/50">
                         <div className="h-full bg-brand-500 rounded-full transition-all duration-1000" style={{ width: `${pct}%` }}></div>
@@ -332,18 +351,20 @@ export default function ActiveVotings({ userProfile }: ActiveVotingsProps) {
                     {(currentVoting.options || []).map((opc: any) => (
                       <label 
                         key={opc.id} 
-                        className={`flex items-center gap-4 p-4 rounded-xl border-2 transition cursor-pointer select-none
+                        className={`flex items-start gap-4 p-4 rounded-xl border-2 transition cursor-pointer select-none
                           ${opcionSeleccionada === opc.id ? 'border-brand-500 bg-brand-50/50' : 'border-[#ECE8DE] bg-white hover:border-brand-200'}
                         `}
                       >
-                        <input 
-                          type="radio" 
-                          name="votoDirecto" 
-                          className="w-5 h-5 accent-brand-600 rounded-full border-[#ECE8DE] bg-white"
-                          checked={opcionSeleccionada === opc.id}
-                          onChange={() => setOpcionSeleccionada(opc.id)}
-                        />
-                        <span className="text-xs font-semibold text-charcoal/90">{opc.label}</span>
+                        <div className="mt-0.5">
+                          <input 
+                            type="radio" 
+                            name="votoDirecto" 
+                            className="w-5 h-5 accent-brand-600 rounded-full border-[#ECE8DE] bg-white"
+                            checked={opcionSeleccionada === opc.id}
+                            onChange={() => setOpcionSeleccionada(opc.id)}
+                          />
+                        </div>
+                        <span className="text-sm font-semibold text-charcoal/90 leading-snug">{opc.label}</span>
                       </label>
                     ))}
 

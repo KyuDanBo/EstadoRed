@@ -1,0 +1,79 @@
+9:import { doc, setDoc, getDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot, increment } from 'firebase/firestore';
+119:  const [pasoActual, setPasoActual] = useState<'bienvenida' | 'seleccion_pais' | 'formulario' | 'completado' | 'moderacion' | 'dashboard' | 'cargando' | 'que_es_estadored'>('cargando');
+120:  const [zoomTarget, setZoomTarget] = useState<{lat: number, lng: number, altitude: number, radius?: number} | null>(null);
+121:  const [paisSeleccionado, setPaisSeleccionado] = useState('');
+124:  const [indicePregunta, setIndicePregunta] = useState(0);
+125:  const [respuestas, setRespuestas] = useState<Record<string, any>>({});
+126:  const [errorInput, setErrorInput] = useState(false);
+127:  const [errorMessage, setErrorMessage] = useState('');
+130:  const [mostrarLogin, setMostrarLogin] = useState(false);
+131:  const [aliasLogin, setAliasLogin] = useState('');
+132:  const [errorLogin, setErrorLogin] = useState('');
+134:  const [isLoggingIn, setIsLoggingIn] = useState(false);
+135:  const [mostrarExplicacion, setMostrarExplicacion] = useState(false);
+137:  const [opcionesExtra, setOpcionesExtra] = useState<{
+147:          setOpcionesExtra({
+165:            setRespuestas(uDoc.data());
+166:            setPasoActual(prev => {
+174:            setPasoActual('bienvenida');
+179:          setPasoActual('bienvenida');
+184:        setPasoActual('bienvenida');
+196:    setPasoActual('seleccion_pais');
+204:    setPaisSeleccionado(nombreDelPais);
+206:    setPasoActual('formulario');
+209:    setZoomTarget({ lat: -16.29, lng: -63.58, altitude: 1.5 });
+223:      setZoomTarget({ lat: base.lat, lng: base.lng, altitude: alt, radius: radius });
+229:    setErrorMessage('');
+242:      setErrorInput(true);
+243:      setTimeout(() => setErrorInput(false), 1000); // Quita el error visual en 1 seg
+249:        setErrorMessage("La contraseña debe tener al menos 6 caracteres.");
+250:        setErrorInput(true);
+251:        setTimeout(() => setErrorInput(false), 1000);
+258:        setErrorMessage("Las contraseñas no coinciden. Por favor, verifícalas.");
+259:        setErrorInput(true);
+260:        setTimeout(() => setErrorInput(false), 1000);
+301:      setIndicePregunta(siguienteSubIndice);
+307:         setPasoActual('cargando');
+324:            setDoc(doc(db, "users", cred.user.uid), repData).then(() => {
+325:                setPasoActual('completado');
+389:          setDoc(doc(db, "users", user.uid), profileData).then(() => {
+397:                  await setDoc(nodeRef, {
+411:                  await setDoc(nodeRef, {
+461:              setDoc(doc(db, 'config', 'options'), data, { merge: true }).catch(console.error);
+481:      setPasoActual('completado');
+486:  const [passwordLogin, setPasswordLogin] = useState('');
+492:    setErrorLogin('');
+493:    setIsLoggingIn(true);
+534:        await setDoc(userDocRef, adminProfileData);
+539:        setRespuestas(userDoc.data());
+540:        setPasoActual('dashboard');
+542:        setMostrarLogin(false);
+548:            setRespuestas(querySnapshot.docs[0].data());
+549:            setPasoActual('dashboard');
+551:            setMostrarLogin(false);
+553:            setErrorLogin('No se encontró información del nodo.');
+558:      setErrorLogin('Credenciales inválidas o error de conexión.');
+560:      setIsLoggingIn(false);
+578:    if (prevIndex >= 0) setIndicePregunta(prevIndex);
+613:              className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-4 transition-all duration-1000 pointer-events-none ${
+640:                onClick={() => setMostrarLogin(true)}
+653:                 onChange={(e) => { setAliasLogin(e.target.value); setErrorLogin(''); }}
+661:                 onChange={(e) => { setPasswordLogin(e.target.value); setErrorLogin(''); }}
+668:                   onClick={() => setMostrarLogin(false)} 
+686:          onClick={() => setPasoActual('que_es_estadored')}
+715:                <div className="absolute inset-0 scale-[0.6] origin-top">
+750:                    onChange={(e) => setRespuestas({ ...respuestas, [preguntaActiva.id]: e.target.value })}
+768:                    onChange={(e) => setRespuestas({ ...respuestas, [preguntaActiva.id]: e.target.value })}
+780:                    onChange={(e) => setRespuestas({ ...respuestas, [preguntaActiva.id]: e.target.value })}
+801:                            setRespuestas({ ...respuestas, [preguntaActiva.id]: av.emoji });
+803:                            setTimeout(avanzarPregunta, 300);
+832:                                setRespuestas({ ...respuestas, [preguntaActiva.id]: [...current, opt] });
+834:                                setRespuestas({ ...respuestas, [preguntaActiva.id]: current.filter(item => item !== opt) });
+1005:                      setPasoActual('moderacion');
+1038:                onClick={() => setPasoActual('dashboard')}
+1052:        (pasoActual === 'bienvenida' || pasoActual === 'seleccion_pais') ? 'w-full absolute inset-0 pointer-events-auto' : 'absolute md:static inset-0 md:flex-1 pointer-events-none'
+1055:        <div className={`absolute inset-0 transition-opacity duration-1000 ${(pasoActual === 'bienvenida' || pasoActual === 'seleccion_pais') ? 'opacity-100' : 'opacity-0'}`}>
+1060:        <div className={`absolute inset-0 transition-opacity duration-1000 md:static md:flex-1 pointer-events-none ${(pasoActual === 'formulario' || pasoActual === 'completado') ? 'opacity-100 delay-500 flex md:block' : 'opacity-0 hidden'} items-center justify-center`}>
+1074:        <div className="absolute inset-0 z-50 flex flex-col bg-[#FAF9F5] overflow-y-auto no-scrollbar animate-in fade-in duration-350">
+1076:            <button onClick={() => setPasoActual('bienvenida')} className="cursor-pointer transition hover:opacity-80">
+1114:        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-creambg text-sandbrown paper-texture">

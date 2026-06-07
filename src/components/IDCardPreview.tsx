@@ -23,7 +23,7 @@ export default function IDCardPreview({ respuestas, pasoActual }: IDCardProps) {
   const ideologia = respuestas['ideologia_otro'] || respuestas['ideologia'] || 'Visión general';
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4 md:p-10 z-0">
+    <div className="md:relative w-full h-full flex items-center justify-center pointer-events-none p-4 md:p-10 z-0">
       <motion.div 
         initial={{ opacity: 0, scale: 0.8, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

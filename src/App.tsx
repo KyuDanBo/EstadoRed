@@ -13,7 +13,7 @@ import IDCardPreview from './components/IDCardPreview';
 import Dashboard from './components/Dashboard';
 import EstadoRedLogo from './components/EstadoRedLogo';
 import EstatutoInfographic from './components/EstatutoInfographic';
-import { ArrowRight, ArrowLeft, Globe2, CheckCircle2, X } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Globe2, CheckCircle2, X, User, Info } from 'lucide-react';
 
 // =======================================================
 // PREGUNTAS DEL FORMULARIO (Test de Identidad Política)
@@ -165,7 +165,7 @@ export default function App() {
             setRespuestas(uDoc.data());
             setPasoActual(prev => {
               if (prev === 'cargando' || prev === 'bienvenida') {
-                navigate('/dashboard', { replace: true });
+                setTimeout(() => navigate('/dashboard', { replace: true }), 0);
                 return 'dashboard';
               }
               return prev;
@@ -293,6 +293,13 @@ export default function App() {
             continue;
           }
         }
+        
+        // Skip territory questions if not Bolivia
+        if (paisSeleccionado && paisSeleccionado !== 'Bolivia' && ['departamento', 'municipio', 'comunidad'].includes(proximaPre.id)) {
+            siguienteSubIndice++;
+            continue;
+        }
+        
         break; // Encontramos una válida
       }
     }
@@ -336,7 +343,10 @@ export default function App() {
         createUserWithEmailAndPassword(auth, emailToRegister, password).then(cred => {
           const user = cred.user;
           // Sanitize Territorio
-          const cleanTerritorio = respuestas['municipio']?.trim() || respuestas['departamento']?.trim() || 'Nacional';
+          let cleanTerritorio = respuestas['municipio']?.trim() || respuestas['departamento']?.trim() || 'Nacional';
+          if (paisSeleccionado && paisSeleccionado !== 'Bolivia') {
+            cleanTerritorio = paisSeleccionado;
+          }
 
           // Sanitize Ocupación
           let cleanOcupacion = respuestas['ocupacion_otro']?.trim() || respuestas['ocupacion']?.trim() || respuestas['sector']?.trim() || 'Cívico';
@@ -386,9 +396,50 @@ export default function App() {
           };
           
           Object.assign(respuestas, profileData); // Mantener para el UI actual
-          setDoc(doc(db, "users", user.uid), profileData).then(() => {
+          setDoc(doc(db, "users", user.uid), profileData).then(async () => {
+            // Register networks
+            const registerNetwork = async (type: string, name: string, parentName?: string) => {
+              const netId = `net_${type}_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+              const netRef = doc(db, 'networks', netId);
+              try {
+                const netSnap = await getDoc(netRef);
+                if (!netSnap.exists()) {
+                  await setDoc(netRef, {
+                    id: netId,
+                    name: name,
+                    scope: type,
+                    desc: `Red ${type} de ${name}`,
+                    parent: parentName || null,
+                    visibility: 'hidden', // Solo visible/editable por admin por defecto
+                    createdAt: serverTimestamp(),
+                    memberCount: 1
+                  });
+                } else {
+                  await setDoc(netRef, {
+                    memberCount: increment(1)
+                  }, { merge: true });
+                }
+              } catch (err) {
+                console.error('Error registering network:', err);
+              }
+              return netId;
+            };
+
+            let maniNetIdTemp;
+            if (paisSeleccionado === 'Bolivia') {
+              const departamento = respuestas['departamento']?.trim() || 'Desconocido';
+              const municipio = respuestas['municipio']?.trim() || 'Desconocido';
+
+              await registerNetwork('Nacional', 'Bolivia');
+              await registerNetwork('Departamental', departamento, 'Bolivia');
+              maniNetIdTemp = await registerNetwork('Municipal', municipio, departamento);
+            } else {
+              await registerNetwork('Global', 'Red de Migrantes');
+              maniNetIdTemp = await registerNetwork('Nacional', paisSeleccionado, 'Red de Migrantes');
+            }
+
             // Register and increment collective node counters
-            const registerNode = async (type: 'territorio' | 'ocupacion' | 'ideologia', val: string) => {
+            const registerNode = async (type: 'territorio' | 'ocupacion' | 'ideologia', val: string, netId?: string) => {
               const nodeId = `${type}_${val.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
               const nodeRef = doc(db, 'collective_nodes', nodeId);
               try {
@@ -398,6 +449,7 @@ export default function App() {
                     id: nodeId,
                     name: val,
                     type: type,
+                    networkId: netId || null,
                     memberCount: 1,
                     createdAt: serverTimestamp()
                   });
@@ -417,9 +469,9 @@ export default function App() {
               }
             };
 
-            registerNode('territorio', cleanTerritorio);
-            registerNode('ocupacion', cleanOcupacion);
-            registerNode('ideologia', cleanIdeologia);
+            await registerNode('territorio', cleanTerritorio, maniNetIdTemp);
+            await registerNode('ocupacion', cleanOcupacion);
+            await registerNode('ideologia', cleanIdeologia);
           }).catch(err => {
             console.error('Error firestore:', err);
           });
@@ -496,6 +548,7 @@ export default function App() {
     const emailLogin = `${emailAlias}@estadored.app`;
     
     const isAdminCredentials = userId.toLowerCase() === 'admin' && passwordLogin === 'administrador';
+    const isTestCredentials = userId.toLowerCase() === 'prueba' && passwordLogin === 'probador';
 
     try {
       // Ingreso con Email y Password
@@ -506,6 +559,8 @@ export default function App() {
         if (isAdminCredentials) {
           // Programmatically build the admin user if they don't exist yet
           cred = await createUserWithEmailAndPassword(auth, 'admin@estadored.app', 'administrador');
+        } else if (isTestCredentials) {
+          cred = await createUserWithEmailAndPassword(auth, 'prueba@estadored.app', 'probador');
         } else {
           throw authErr;
         }
@@ -532,6 +587,25 @@ export default function App() {
           createdAt: serverTimestamp()
         };
         await setDoc(userDocRef, adminProfileData);
+        userDoc = await getDoc(userDocRef);
+      } else if (!userDoc.exists() && isTestCredentials) {
+        // Seed the test profile data
+        const testProfileData = {
+          alias: 'prueba',
+          rol: 'Ciudadano',
+          avatar: '👀',
+          isTestUser: true,
+          triada: {
+            territorio: 'Nivel Pruebas',
+            ocupacion: 'Beta Tester',
+            ideologia: 'Observador'
+          },
+          stats: { xp: 100, ip: 100 },
+          email: 'prueba@estadored.app',
+          configInitialSetupDone: false,
+          createdAt: serverTimestamp()
+        };
+        await setDoc(userDocRef, testProfileData);
         userDoc = await getDoc(userDocRef);
       }
       
@@ -614,33 +688,62 @@ export default function App() {
                 pasoActual !== 'bienvenida' ? 'opacity-0 scale-110' : 'opacity-100 bg-charcoal/40 backdrop-blur-sm'
               }`}
             >
-        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-8 sm:p-12 stone-card shadow-2xl max-w-[90%] md:max-w-lg w-full text-center relative overflow-hidden transition-all duration-300 rounded-3xl ${
+        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-6 sm:p-10 stone-card shadow-2xl max-w-[95%] md:max-w-lg w-full text-center relative overflow-y-auto max-h-[90vh] no-scrollbar flex flex-col transition-all duration-300 rounded-3xl ${
           pasoActual === 'bienvenida' ? 'pointer-events-auto' : 'pointer-events-none'
         }`}>
           {/* Earth-toned background decor */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-sandbrown-light/20 rounded-full blur-[60px] -z-10"></div>
           
-          <EstadoRedLogo showText={true} textSize="xl" className="mb-8" />
+          <EstadoRedLogo showText={true} textSize="xl" className="mb-6 shrink-0" />
           
-          <div className="h-[3px] w-16 bg-palmgreen mx-auto mb-8 opacity-80 rounded-full"></div>
+          <div className="h-[3px] w-16 bg-palmgreen mx-auto mb-6 opacity-80 rounded-full shrink-0"></div>
           
           {!mostrarLogin ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 shrink-0">
               <button 
                 onClick={empezarSeleccionPais}
-                className="stone-btn w-full bg-palmgreen hover:bg-palmgreen-dark text-white border border-palmgreen/20 p-5 shadow-lg flex items-center justify-center cursor-pointer rounded-2xl transition hover:-translate-y-1"
+                className="stone-btn group relative w-full bg-charcoal hover:bg-charcoal/90 text-white border border-transparent py-4 px-5 shadow-xl flex flex-col items-center justify-center cursor-pointer rounded-2xl transition hover:-translate-y-1 overflow-hidden shrink-0"
               >
-                <span className="font-bold text-sm md:text-base flex items-center justify-center gap-3">
-                  <Globe2 className="w-6 h-6 shrink-0 text-skyblue-light" /> 
-                  Girar el globo y elegir territorio
-                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-palmgreen/40 to-skyblue-light/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative z-10 flex flex-col items-center gap-1">
+                  <div className="bg-white/10 p-2 rounded-full mb-1">
+                    <Globe2 className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                  </div>
+                  <span className="font-extrabold text-sm md:text-base uppercase tracking-wider">
+                    Registro de Nuevo Nodo
+                  </span>
+                  <span className="text-[10px] md:text-[11px] text-white/70 font-medium">Girar el globo y organizar mi territorio</span>
+                </div>
               </button>
               
               <button 
                 onClick={() => setMostrarLogin(true)}
-                className="stone-btn w-full bg-transparent hover:bg-warmgray/50 text-charcoal/80 border border-warmgray-dark p-4 text-xs font-bold uppercase tracking-widest cursor-pointer rounded-2xl transition"
+                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-4 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
               >
-                Ingresar a mi Nodo Existente
+                <div className="flex flex-col items-center gap-1">
+                  <div className="bg-warmgray/30 p-2 rounded-full mb-1 group-hover:bg-sandbrown/10 transition-colors">
+                    <User className="w-4 h-4 md:w-5 md:h-5 text-charcoal/60 group-hover:text-sandbrown transition-colors" />
+                  </div>
+                  <span className="font-bold text-[11px] md:text-xs uppercase tracking-widest text-charcoal/90">
+                    Ingresar a mi Red
+                  </span>
+                  <span className="text-[9px] md:text-[10px] text-charcoal/50 font-medium">Autenticación para nodos existentes</span>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => setPasoActual('que_es_estadored')}
+                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-4 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <div className="bg-warmgray/30 p-2 rounded-full mb-1 group-hover:bg-skyblue-light/10 transition-colors">
+                    <Info className="w-4 h-4 md:w-5 md:h-5 text-charcoal/60 group-hover:text-skyblue-dark transition-colors" />
+                  </div>
+                  <span className="font-bold text-[11px] md:text-xs uppercase tracking-widest text-charcoal/90">
+                    ¿Qué es EstadoRed?
+                  </span>
+                  <span className="text-[9px] md:text-[10px] text-charcoal/50 font-medium">Conoce nuestra visión y estatutos</span>
+                </div>
               </button>
             </div>
           ) : (
@@ -680,14 +783,6 @@ export default function App() {
             </form>
           )}
         </div>
-        
-        {/* Botón de ¿Qué es EstadoRed? */}
-        <button
-          onClick={() => setPasoActual('que_es_estadored')}
-          className={`mt-8 text-xs font-black uppercase tracking-widest text-charcoal/80 bg-white/80 backdrop-blur-xl px-6 py-3.5 border border-white/50 shadow-lg hover:bg-white hover:text-charcoal transition-all rounded-2xl pointer-events-auto ${pasoActual === 'bienvenida' ? 'opacity-100' : 'opacity-0 hidden'}`}
-        >
-          ¿Qué es EstadoRed?
-        </button>
       </div>
 
       {/* =======================================================
@@ -968,17 +1063,17 @@ export default function App() {
 
                        <div className="flex flex-col gap-2">
                          <a 
-                           href={`https://t.me/mock_estadored_territorio_${(respuestas['departamento'] || respuestas['municipio'] || 'nacional').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`} 
+                           href={`https://t.me/EstadoRedBoBot?start=nodo_territorial_${(respuestas['comunidad'] || respuestas['municipio'] || respuestas['departamento'] || 'nacional').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`} 
                            target="_blank" 
                            rel="noopener noreferrer" 
                            className="flex items-center justify-between bg-white hover:bg-[#FAF9F5] border border-[#ECE8DE] transition-all text-charcoal/80 p-2.5 rounded-lg text-xs shadow-sm"
                          >
-                           <span>📍 <b>Territorial:</b> {respuestas['departamento'] || respuestas['municipio'] || 'Nacional'}</span>
+                           <span>📍 <b>Territorial:</b> {respuestas['comunidad'] || respuestas['municipio'] || respuestas['departamento'] || 'Nacional'}</span>
                            <span className="text-[10px] font-bold uppercase text-skyblue hover:underline">Unirse ⚡</span>
                          </a>
 
                          <a 
-                           href={`https://t.me/mock_estadored_ocupacion_${(respuestas['ocupacion_otro'] || respuestas['ocupacion'] || respuestas['sector'] || 'civico').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`} 
+                           href={`https://t.me/EstadoRedBoBot?start=nodo_sectorial_${(respuestas['ocupacion_otro'] || respuestas['ocupacion'] || respuestas['sector'] || 'civico').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`} 
                            target="_blank" 
                            rel="noopener noreferrer" 
                            className="flex items-center justify-between bg-white hover:bg-[#FAF9F5] border border-[#ECE8DE] transition-all text-charcoal/80 p-2.5 rounded-lg text-xs shadow-sm"
@@ -988,7 +1083,7 @@ export default function App() {
                          </a>
 
                          <a 
-                           href={`https://t.me/mock_estadored_ideologia_${(respuestas['ideologia_otro'] || respuestas['ideologia'] || 'pragmatico').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`} 
+                           href={`https://t.me/EstadoRedBoBot?start=nodo_ideologico_${(respuestas['ideologia_otro'] || respuestas['ideologia'] || 'pragmatico').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`} 
                            target="_blank" 
                            rel="noopener noreferrer" 
                            className="flex items-center justify-between bg-white hover:bg-[#FAF9F5] border border-[#ECE8DE] transition-all text-charcoal/80 p-2.5 rounded-lg text-xs shadow-sm"
@@ -1045,6 +1140,8 @@ export default function App() {
         )}
       </aside>
 
+
+
       {/* =======================================================
           FONDOS DINÁMICOS (Globo o Red de Puntos)
           ======================================================= */}
@@ -1057,7 +1154,7 @@ export default function App() {
         </div>
 
         {/* Mostramos la Tarjeta de Identificación al estar contestando o al acabar */}
-        <div className={`absolute inset-0 transition-opacity duration-1000 pointer-events-none ${(pasoActual === 'formulario' || pasoActual === 'completado') ? 'opacity-100 delay-500 hidden md:block' : 'opacity-0'} flex items-center justify-center`}>
+        <div className={`absolute inset-0 transition-opacity duration-1000 md:static md:flex-1 pointer-events-none ${(pasoActual === 'formulario' || pasoActual === 'completado') ? 'opacity-100 delay-500 flex md:block' : 'opacity-0 hidden'} items-center justify-center`}>
            <IDCardPreview respuestas={respuestas} pasoActual={pasoActual} />
         </div>
 

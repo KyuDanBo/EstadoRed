@@ -17,8 +17,8 @@ export default function EstadoRedLogo({
   const textSizes = {
     sm: 'text-xl md:text-2xl',
     md: 'text-2xl md:text-3xl',
-    lg: 'text-4xl md:text-5xl',
-    xl: 'text-5xl md:text-6xl'
+    lg: 'text-3xl md:text-4xl',
+    xl: 'text-4xl md:text-5xl'
   };
 
   return (
@@ -66,7 +66,7 @@ export default function EstadoRedLogo({
             <span>Estado</span>
             <span className="font-light text-charcoal/70">Red</span>
           </h1>
-          <p className={`text-xs md:text-sm tracking-[0.2em] uppercase font-sans mt-2 opacity-70 ${lightText ? 'text-white/80' : 'text-charcoal/80'}`}>
+          <p className={`text-[9px] sm:text-xs md:text-sm tracking-[0.1em] sm:tracking-[0.2em] uppercase font-sans mt-2 opacity-70 ${lightText ? 'text-white/80' : 'text-charcoal/80'}`}>
             Gobernanza Comunitaria & Red Democrática
           </p>
         </div>

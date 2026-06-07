@@ -526,11 +526,13 @@ export default function App() {
                ideologia: cleanIdeologia,
                accion_2: respuestas['accion_2']
             })
-          }).catch(err => console.error("Error al enviar:", err));
+          }).catch(err => console.error("Error al enviar:", err)).finally(() => {
+            setPasoActual('dashboard');
+            navigate('/dashboard');
+          });
         }).catch(err => console.error('Error auth:', err));
         
       }
-      setPasoActual('completado');
     }
   };
 
@@ -688,21 +690,21 @@ export default function App() {
                 pasoActual !== 'bienvenida' ? 'opacity-0 scale-110' : 'opacity-100 bg-charcoal/40 backdrop-blur-sm'
               }`}
             >
-        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-6 sm:p-10 stone-card shadow-2xl max-w-[95%] md:max-w-lg w-full text-center relative overflow-y-auto max-h-[90vh] no-scrollbar flex flex-col transition-all duration-300 rounded-3xl ${
+        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-5 sm:p-8 stone-card shadow-2xl max-w-[95%] md:max-w-lg w-full text-center relative overflow-y-auto max-h-[90vh] no-scrollbar flex flex-col transition-all duration-300 rounded-3xl ${
           pasoActual === 'bienvenida' ? 'pointer-events-auto' : 'pointer-events-none'
         }`}>
           {/* Earth-toned background decor */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-sandbrown-light/20 rounded-full blur-[60px] -z-10"></div>
           
-          <EstadoRedLogo showText={true} textSize="xl" className="mb-6 shrink-0" />
+          <EstadoRedLogo showText={true} textSize="xl" className="mb-4 shrink-0" />
           
-          <div className="h-[3px] w-16 bg-palmgreen mx-auto mb-6 opacity-80 rounded-full shrink-0"></div>
+          <div className="h-[3px] w-16 bg-palmgreen mx-auto mb-4 opacity-80 rounded-full shrink-0"></div>
           
           {!mostrarLogin ? (
-            <div className="flex flex-col gap-3 shrink-0">
+            <div className="flex flex-col gap-2.5 shrink-0">
               <button 
                 onClick={empezarSeleccionPais}
-                className="stone-btn group relative w-full bg-charcoal hover:bg-charcoal/90 text-white border border-transparent py-4 px-5 shadow-xl flex flex-col items-center justify-center cursor-pointer rounded-2xl transition hover:-translate-y-1 overflow-hidden shrink-0"
+                className="stone-btn group relative w-full bg-charcoal hover:bg-charcoal/90 text-white border border-transparent py-3 px-5 shadow-xl flex flex-col items-center justify-center cursor-pointer rounded-2xl transition hover:-translate-y-1 overflow-hidden shrink-0"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-palmgreen/40 to-skyblue-light/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -710,15 +712,15 @@ export default function App() {
                     <Globe2 className="w-5 h-5 md:w-6 md:h-6 text-white" />
                   </div>
                   <span className="font-extrabold text-sm md:text-base uppercase tracking-wider">
-                    Registro de Nuevo Nodo
+                    Registrar nuevo usuario
                   </span>
-                  <span className="text-[10px] md:text-[11px] text-white/70 font-medium">Girar el globo y organizar mi territorio</span>
+                  <span className="text-[10px] md:text-[11px] text-white/70 font-medium">Gira el globo y selecciona tu país</span>
                 </div>
               </button>
               
               <button 
                 onClick={() => setMostrarLogin(true)}
-                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-4 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
+                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-3 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
               >
                 <div className="flex flex-col items-center gap-1">
                   <div className="bg-warmgray/30 p-2 rounded-full mb-1 group-hover:bg-sandbrown/10 transition-colors">
@@ -733,7 +735,7 @@ export default function App() {
 
               <button 
                 onClick={() => setPasoActual('que_es_estadored')}
-                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-4 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
+                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-3 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
               >
                 <div className="flex flex-col items-center gap-1">
                   <div className="bg-warmgray/30 p-2 rounded-full mb-1 group-hover:bg-skyblue-light/10 transition-colors">

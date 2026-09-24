@@ -110,9 +110,32 @@
         "createdAt": { "type": "string" }
       },
       "required": ["targetId", "targetName", "type", "description", "userId"]
+    },
+    "Respuesta10kMillones": {
+      "title": "Respuesta10kMillones",
+      "description": "Respuestas ciudadanas a la pregunta sobre los 10 mil millones de dolares con fecha y hora",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "respuesta": { "type": "string" },
+        "userId": { "type": "string" },
+        "alias": { "type": "string" },
+        "status": { "type": "string" },
+        "esAnonima": { "type": "boolean" },
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "fechaHoraISO": { "type": "string" },
+        "timestampMs": { "type": "number" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["respuesta", "fecha", "hora"]
     }
   },
   "firestore": {
+    "/respuestas_10k_millones/{respId}": {
+      "schema": { "$ref": "#/entities/Respuesta10kMillones" },
+      "description": "Respuestas de la pregunta inicial de 10 mil millones de dolares vinculadas o anonimas."
+    },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "Stores user profiles."

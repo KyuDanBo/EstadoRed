@@ -168,14 +168,20 @@ function startTelegramBot() {
 
   const launchBot = async (retries = 3) => {
     try {
+      await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
       await bot.launch({ dropPendingUpdates: true });
       console.log("Telegram bot launched successfully!");
     } catch (err: any) {
-      if (err.code === 409 && retries > 0) {
-        console.log(`Telegram Bot conflict (409). Retrying in 5s... (${retries} retries left)`);
-        setTimeout(() => launchBot(retries - 1), 5000);
+      const is409 = err?.response?.error_code === 409 || err?.code === 409 || String(err?.message || '').includes('409');
+      if (is409) {
+        if (retries > 0) {
+          console.warn(`Telegram Bot conflict (409). Reintentando en 6s... (${retries} intentos restantes)`);
+          setTimeout(() => launchBot(retries - 1), 6000);
+        } else {
+          console.warn("Aviso: El bot de Telegram ya está activo en otra instancia. El servidor continuará operando normalmente.");
+        }
       } else {
-        console.error("Failed to launch Telegram bot:", err);
+        console.warn("Aviso al iniciar bot de Telegram:", err.message || err);
       }
     }
   };
@@ -233,6 +239,61 @@ Por favor responder a este mensaje.
 
       res.json({ success: true, message: "Node created and administrators notified" });
     } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // API Route: Save or link response to the 10k million dollars question
+  app.post("/api/respuestas-10k", async (req, res) => {
+    try {
+      const { id, respuesta, userId, alias, status, fecha, hora, fechaHoraISO, timestampMs, esAnonima } = req.body;
+      if (!respuesta || typeof respuesta !== "string") {
+        return res.status(400).json({ success: false, error: "Respuesta inválida" });
+      }
+      const docId = id || `resp_10k_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      
+      const now = new Date();
+      const payload: any = {
+        id: docId,
+        respuesta: respuesta.trim(),
+        userId: userId || null,
+        alias: alias || null,
+        status: status || (userId ? "vinculado" : "anonima"),
+        esAnonima: typeof esAnonima === 'boolean' ? esAnonima : !userId,
+        fecha: fecha || now.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        hora: hora || now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        fechaHoraISO: fechaHoraISO || now.toISOString(),
+        timestampMs: timestampMs || now.getTime(),
+        createdAt: FieldValue.serverTimestamp()
+      };
+
+      // Responded immediately to client
+      res.json({ success: true, id: docId });
+
+      // Save asynchronously without blocking client
+      if (dbExt) {
+        Promise.race([
+          dbExt.collection("respuestas_10k_millones").doc(docId).set(payload, { merge: true }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout firestore admin")), 3000))
+        ]).catch(err => console.warn("Firestore admin background write:", err.message));
+      }
+    } catch (error: any) {
+      console.error("Error en /api/respuestas-10k:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // API Route: List responses to 10k million dollars question
+  app.get("/api/respuestas-10k", async (_req, res) => {
+    try {
+      if (dbExt) {
+        const snap = await dbExt.collection("respuestas_10k_millones").orderBy("timestampMs", "desc").limit(500).get();
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return res.json({ success: true, count: items.length, items });
+      }
+      res.json({ success: true, count: 0, items: [] });
+    } catch (error: any) {
+      console.error("Error al listar /api/respuestas-10k:", error);
       res.status(500).json({ success: false, error: error.message });
     }
   });

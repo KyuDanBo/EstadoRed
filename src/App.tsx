@@ -13,7 +13,7 @@ import IDCardPreview from './components/IDCardPreview';
 import Dashboard from './components/Dashboard';
 import EstadoRedLogo from './components/EstadoRedLogo';
 import EstatutoInfographic from './components/EstatutoInfographic';
-import { ArrowRight, ArrowLeft, Globe2, CheckCircle2, X, User, Info } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Globe2, CheckCircle2, X, User, Info, Eye, EyeOff } from 'lucide-react';
 
 // =======================================================
 // PREGUNTAS DEL FORMULARIO (Test de Identidad Política)
@@ -126,9 +126,16 @@ export default function App() {
   const [errorInput, setErrorInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Estados pre-login
-  const [mostrarLogin, setMostrarLogin] = useState(false);
+  // Estados onboarding
+  const [onboardingFase, setOnboardingFase] = useState<'pregunta_10k' | 'invitacion_registro' | 'sesion_terminada' | 'alias' | 'password_login' | 'barrio_registro' | 'password_registro'>('pregunta_10k');
+  const [respuesta10k, setRespuesta10k] = useState('');
+  const [respuesta10kDocId, setRespuesta10kDocId] = useState<string | null>(null);
+  const [enviandoRespuesta10k, setEnviandoRespuesta10k] = useState(false);
+  const [error10k, setError10k] = useState('');
   const [aliasLogin, setAliasLogin] = useState('');
+  const [barrioLogin, setBarrioLogin] = useState('');
+  const [passwordLogin, setPasswordLogin] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorLogin, setErrorLogin] = useState('');
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -536,9 +543,235 @@ export default function App() {
     }
   };
 
-  // Función: Manejar Ingreso Existente
-  const [passwordLogin, setPasswordLogin] = useState('');
-  
+  // --- FLUJO DE ONBOARDING ---
+  const manejarEnvioRespuesta10k = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!respuesta10k.trim()) {
+      setError10k('Por favor escribe tu propuesta antes de enviar.');
+      return;
+    }
+    setError10k('');
+    setEnviandoRespuesta10k(true);
+
+    const docId = respuesta10kDocId || `resp_10k_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    setRespuesta10kDocId(docId);
+
+    const now = new Date();
+    const fecha = now.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const hora = now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const fechaHoraISO = now.toISOString();
+    const timestampMs = now.getTime();
+
+    const dataPayload = {
+      id: docId,
+      respuesta: respuesta10k.trim(),
+      fecha,
+      hora,
+      fechaHoraISO,
+      timestampMs,
+      esAnonima: true,
+      status: 'anonima',
+      userId: null,
+      alias: null,
+      createdAt: serverTimestamp()
+    };
+
+    try {
+      // 1. Guardar en base de datos Firestore (colección respuestas_10k_millones)
+      await setDoc(doc(db, 'respuestas_10k_millones', docId), dataPayload);
+
+      // 2. Guardar también mediante el endpoint de respaldo del servidor
+      fetch('/api/respuestas-10k', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...dataPayload,
+          createdAt: undefined
+        })
+      }).catch(err => console.warn('Respaldo en servidor:', err));
+
+      setOnboardingFase('invitacion_registro');
+    } catch (err: any) {
+      console.error('Error al guardar respuesta 10k en Firestore:', err);
+      // Intento por API del servidor
+      try {
+        await fetch('/api/respuestas-10k', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: docId,
+            respuesta: respuesta10k.trim(),
+            status: 'pendiente'
+          })
+        });
+        setOnboardingFase('invitacion_registro');
+      } catch (apiErr) {
+        setError10k('Error al guardar tu propuesta. Por favor intenta nuevamente.');
+      }
+    } finally {
+      setEnviandoRespuesta10k(false);
+    }
+  };
+
+  const checkAliasExists = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aliasLogin.trim()) return;
+    const alphaNum = aliasLogin.replace(/[^a-zA-Z0-9]/g, '');
+    if (alphaNum.length === 0) { setErrorLogin('El alias debe contener al menos una letra o número'); return; }
+    setErrorLogin('');
+    setIsLoggingIn(true);
+    const emailAlias = aliasLogin.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const emailToCheck = `${emailAlias}@estadored.app`;
+    try {
+        const q1 = query(collection(db, "users"), where("email", "==", emailToCheck));
+        const q2 = query(collection(db, "users"), where("alias", "==", aliasLogin.trim()));
+        const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+        if (!snap1.empty || !snap2.empty) {
+            // Ya existe en la base de datos
+            setOnboardingFase('password_login');
+        } else {
+            // No existe
+            setOnboardingFase('barrio_registro');
+        }
+    } catch(err) {
+        console.warn("Fallo búsqueda alias:", err);
+        // Si hay lentitud o error de búsqueda, permitir avanzar
+        setOnboardingFase('barrio_registro');
+    } finally {
+        setIsLoggingIn(false);
+    }
+  };
+
+  const processBarrio = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!barrioLogin.trim()) return;
+      setOnboardingFase('password_registro');
+  };
+
+  const registrarNuevoUsuario = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!passwordLogin.trim() || passwordLogin.length < 6) {
+          setErrorLogin('Mínimo 6 caracteres');
+          return;
+      }
+      setErrorLogin('');
+      setIsLoggingIn(true);
+      const userId = aliasLogin.trim();
+      let emailAlias = userId.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!emailAlias) emailAlias = 'nodo' + Math.floor(Math.random() * 100000);
+      const emailToRegister = `${emailAlias}@estadored.app`;
+
+      try {
+          let cred: any;
+          try {
+              cred = await createUserWithEmailAndPassword(auth, emailToRegister, passwordLogin);
+          } catch (authErr: any) {
+              if (authErr.code === 'auth/email-already-in-use') {
+                  // Si el usuario ya existe en Auth, intentamos iniciar sesión automáticamente
+                  try {
+                      cred = await signInWithEmailAndPassword(auth, emailToRegister, passwordLogin);
+                  } catch (loginErr: any) {
+                      setOnboardingFase('password_login');
+                      setErrorLogin('Este alias ya está registrado. Ingresa tu contraseña para acceder.');
+                      setIsLoggingIn(false);
+                      return;
+                  }
+              } else {
+                  throw authErr;
+              }
+          }
+
+          const cleanBarrio = barrioLogin.trim() || 'Bolivia';
+          
+          const basicProfile: any = {
+              uid: cred.user.uid,
+              alias: userId,
+              email: emailToRegister,
+              rol: 'Ciudadano',
+              avatar: '🦙',
+              triada: {
+                  barrio: cleanBarrio,
+                  territorio: cleanBarrio,
+                  ocupacion: 'Cívico',
+                  ideologia: 'Pragmático'
+              },
+              stats: { xp: 50, ip: 0 },
+              createdAt: serverTimestamp(),
+              configInitialSetupDone: false
+          };
+
+          // Vincular primera propuesta con la respuesta de los 10 mil millones de dólares:
+          if (respuesta10k.trim()) {
+              basicProfile.accion_2 = respuesta10k.trim();
+              basicProfile.visiones = [{
+                  text: respuesta10k.trim(),
+                  timestamp: new Date().toISOString(),
+                  origen: 'pregunta_10k_millones'
+              }];
+              basicProfile.primera_propuesta_10k = respuesta10k.trim();
+              if (respuesta10kDocId) {
+                  basicProfile.id_respuesta_10k = respuesta10kDocId;
+              }
+          }
+
+          // Guardar perfil del usuario
+          await setDoc(doc(db, "users", cred.user.uid), basicProfile, { merge: true });
+
+          // Tareas en segundo plano (asíncronas, no bloquean la pantalla)
+          if (respuesta10kDocId) {
+              setDoc(doc(db, "respuestas_10k_millones", respuesta10kDocId), {
+                  id: respuesta10kDocId,
+                  respuesta: respuesta10k.trim(),
+                  userId: cred.user.uid,
+                  alias: userId,
+                  status: "vinculado",
+                  esAnonima: false
+              }, { merge: true }).catch(errDb => console.warn("Sync respuesta_10k:", errDb));
+
+              fetch('/api/respuestas-10k', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      id: respuesta10kDocId,
+                      respuesta: respuesta10k.trim(),
+                      userId: cred.user.uid,
+                      alias: userId,
+                      status: 'vinculado',
+                      esAnonima: false
+                  })
+              }).catch(() => {});
+          }
+
+          if (respuesta10k.trim()) {
+              const propId = `prop_${cred.user.uid}_${Date.now()}`;
+              setDoc(doc(db, "proposals", propId), {
+                  userId: cred.user.uid,
+                  alias: userId,
+                  content: respuesta10k.trim(),
+                  triada: {
+                      territorio: cleanBarrio,
+                      ocupacion: 'Cívico',
+                      ideologia: 'Pragmático'
+                  },
+                  supportCount: 0,
+                  status: 'approved',
+                  timestamp: serverTimestamp(),
+                  level: 1,
+                  titulo: 'Inversión Soberana: Uso de los $10.000.000.000'
+              }).catch(errProp => console.warn("Sync proposal:", errProp));
+          }
+
+          setRespuestas(basicProfile);
+          setPasoActual('dashboard');
+          setIsLoggingIn(false);
+          navigate('/dashboard', { replace: true });
+      } catch (err: any) {
+          console.error("Error en registro:", err);
+          setErrorLogin('Error: ' + (err.message || 'Fallo de conexión.'));
+          setIsLoggingIn(false);
+      }
+  };
+
   const manejarLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aliasLogin.trim() || !passwordLogin.trim()) return;
@@ -546,7 +779,8 @@ export default function App() {
     setErrorLogin('');
     setIsLoggingIn(true);
     const userId = aliasLogin.trim();
-    const emailAlias = userId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let emailAlias = userId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!emailAlias) emailAlias = 'nodo' + Math.floor(Math.random() * 100000);
     const emailLogin = `${emailAlias}@estadored.app`;
     
     const isAdminCredentials = userId.toLowerCase() === 'admin' && passwordLogin === 'administrador';
@@ -612,10 +846,35 @@ export default function App() {
       }
       
       if (userDoc.exists()) {
-        setRespuestas(userDoc.data());
+        const userData = userDoc.data();
+        // Si el usuario respondió la pregunta de los 10k en esta sesión, vincularla también
+        if (respuesta10k.trim() && respuesta10kDocId) {
+            try {
+                await setDoc(doc(db, "respuestas_10k_millones", respuesta10kDocId), {
+                    userId: cred.user.uid,
+                    alias: userData.alias || userId,
+                    status: "vinculado",
+                    esAnonima: false
+                }, { merge: true });
+                fetch('/api/respuestas-10k', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: respuesta10kDocId,
+                        respuesta: respuesta10k.trim(),
+                        userId: cred.user.uid,
+                        alias: userData.alias || userId,
+                        status: 'vinculado',
+                        esAnonima: false
+                    })
+                }).catch(() => {});
+            } catch (vErr) {
+                console.error("Error vinculando en login:", vErr);
+            }
+        }
+        setRespuestas(userData);
         setPasoActual('dashboard');
         navigate('/dashboard');
-        setMostrarLogin(false);
       } else {
         // En caso de fallar o si se migra, buscamos por alias
         const q = query(collection(db, "users"), where("alias", "==", userId));
@@ -624,7 +883,6 @@ export default function App() {
             setRespuestas(querySnapshot.docs[0].data());
             setPasoActual('dashboard');
             navigate('/dashboard');
-            setMostrarLogin(false);
         } else {
             setErrorLogin('No se encontró información del nodo.');
         }
@@ -696,90 +954,290 @@ export default function App() {
           {/* Earth-toned background decor */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-sandbrown-light/20 rounded-full blur-[60px] -z-10"></div>
           
-          <EstadoRedLogo showText={true} textSize="xl" className="mb-4 shrink-0" />
+          <EstadoRedLogo showText={true} textSize="xl" className="mb-2 shrink-0" />
           
-          <div className="h-[3px] w-16 bg-palmgreen mx-auto mb-4 opacity-80 rounded-full shrink-0"></div>
-          
-          {!mostrarLogin ? (
-            <div className="flex flex-col gap-2.5 shrink-0">
-              <button 
-                onClick={empezarSeleccionPais}
-                className="stone-btn group relative w-full bg-charcoal hover:bg-charcoal/90 text-white border border-transparent py-3 px-5 shadow-xl flex flex-col items-center justify-center cursor-pointer rounded-2xl transition hover:-translate-y-1 overflow-hidden shrink-0"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-palmgreen/40 to-skyblue-light/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="bg-white/10 p-2 rounded-full mb-1">
-                    <Globe2 className="w-5 h-5 md:w-6 md:h-6 text-white" />
-                  </div>
-                  <span className="font-extrabold text-sm md:text-base uppercase tracking-wider">
-                    Registrar nuevo usuario
-                  </span>
-                  <span className="text-[10px] md:text-[11px] text-white/70 font-medium">Gira el globo y selecciona tu país</span>
-                </div>
-              </button>
-              
-              <button 
-                onClick={() => setMostrarLogin(true)}
-                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-3 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <div className="bg-warmgray/30 p-2 rounded-full mb-1 group-hover:bg-sandbrown/10 transition-colors">
-                    <User className="w-4 h-4 md:w-5 md:h-5 text-charcoal/60 group-hover:text-sandbrown transition-colors" />
-                  </div>
-                  <span className="font-bold text-[11px] md:text-xs uppercase tracking-widest text-charcoal/90">
-                    Ingresar a mi Red
-                  </span>
-                  <span className="text-[9px] md:text-[10px] text-charcoal/50 font-medium">Autenticación para nodos existentes</span>
-                </div>
-              </button>
+          <div className="h-[2.5px] w-14 bg-palmgreen mx-auto mb-3 opacity-80 rounded-full shrink-0"></div>
 
-              <button 
-                onClick={() => setPasoActual('que_es_estadored')}
-                className="stone-btn group w-full bg-[#FAF9F5] hover:bg-white text-charcoal/80 border border-warmgray-dark py-3 px-5 flex flex-col items-center justify-center cursor-pointer rounded-2xl transition shadow-sm hover:shadow-md hover:-translate-y-0.5 shrink-0"
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <div className="bg-warmgray/30 p-2 rounded-full mb-1 group-hover:bg-skyblue-light/10 transition-colors">
-                    <Info className="w-4 h-4 md:w-5 md:h-5 text-charcoal/60 group-hover:text-skyblue-dark transition-colors" />
-                  </div>
-                  <span className="font-bold text-[11px] md:text-xs uppercase tracking-widest text-charcoal/90">
-                    ¿Qué es EstadoRed?
-                  </span>
-                  <span className="text-[9px] md:text-[10px] text-charcoal/50 font-medium">Conoce nuestra visión y estatutos</span>
-                </div>
-              </button>
-            </div>
-          ) : (
-             <form onSubmit={manejarLogin} className="w-full flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-350">
-               <h2 className="font-serif text-charcoal text-2xl md:text-3xl font-black mb-2">Acceso al Estado Red</h2>
-               <input 
-                 type="text" 
-                 placeholder="Tu Alias o Pseudónimo..." 
-                 value={aliasLogin}
-                 onChange={(e) => { setAliasLogin(e.target.value); setErrorLogin(''); }}
-                 className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium"
-                 autoFocus
-               />
-               <input 
-                 type="password" 
-                 placeholder="Tu Contraseña..." 
-                 value={passwordLogin}
-                 onChange={(e) => { setPasswordLogin(e.target.value); setErrorLogin(''); }}
-                 className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium"
-               />
-               {errorLogin && <p className="text-rust text-xs text-left px-2 font-bold bg-rust/10 py-2 rounded-lg">{errorLogin}</p>}
-               <div className="flex gap-3 w-full mt-2">
+          {/* FASE 1: PREGUNTA INICIAL OBLIGATORIA DE ENTRADA (Siempre activa al ingresar) */}
+          {onboardingFase === 'pregunta_10k' && (
+            <form onSubmit={manejarEnvioRespuesta10k} className="w-full flex flex-col gap-3 pt-1 animate-in fade-in zoom-in-95 duration-350 shrink-0 text-left">
+               <div className="text-center mb-1">
+                 <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase bg-sandbrown/10 text-sandbrown border border-sandbrown/20 mb-2">
+                   Consulta Soberana
+                 </span>
+                 <h2 className="font-serif text-charcoal text-base sm:text-lg md:text-xl font-black leading-snug">
+                   ¿Qué harías con los 10.000.000.000 $ (Diez mil millones de dólares americanos) que promete el Gobierno nacional?
+                 </h2>
+                 <p className="text-[11px] text-charcoal/60 mt-1 font-medium">
+                   No necesitas registrarte para responder.
+                 </p>
+               </div>
+               
+               <div className="relative w-full">
+                 <textarea 
+                   rows={4}
+                   maxLength={1000}
+                   placeholder="Escribe aquí tu propuesta o en qué invertirías este monto..." 
+                   value={respuesta10k}
+                   onChange={(e) => { setRespuesta10k(e.target.value); setError10k(''); }}
+                   className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-2xl p-4 text-xs sm:text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium resize-none"
+                   autoFocus
+                 />
+                 <div className="text-[10px] text-charcoal/40 text-right pr-2 pt-0.5">
+                   {respuesta10k.length} / 1000 caracteres
+                 </div>
+               </div>
+               
+               {error10k && <p className="text-rust text-xs text-center font-bold">{error10k}</p>}
+               
+               <button 
+                 type="submit" 
+                 disabled={enviandoRespuesta10k || !respuesta10k.trim()}
+                 className="stone-btn w-full px-4 py-3.5 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl transition-all font-black shadow-md shadow-sandbrown/20 uppercase tracking-widest text-[11px] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+               >
+                 {enviandoRespuesta10k ? 'Registrando propuesta...' : 'Enviar mi respuesta'}
+               </button>
+
+               <div className="pt-2 text-center border-t border-[#ECE8DE]/60 mt-1 flex flex-col gap-1.5">
                  <button 
                    type="button" 
-                   onClick={() => setMostrarLogin(false)} 
-                   className="stone-btn px-4 py-4 bg-warmgray/60 text-charcoal/80 hover:bg-warmgray border border-warmgray-dark rounded-xl transition-all w-1/3 text-[11px] font-black uppercase tracking-widest"
+                   onClick={() => { setOnboardingFase('alias'); setErrorLogin(''); }} 
+                   className="text-[11px] font-bold text-charcoal/60 hover:text-sandbrown transition-colors cursor-pointer"
+                 >
+                   ¿Ya tienes cuenta en la red? <span className="underline decoration-sandbrown/40">Ingresar con tu alias</span>
+                 </button>
+                 <button 
+                   type="button" 
+                   onClick={() => setPasoActual('que_es_estadored')} 
+                   className="text-[10px] font-semibold text-charcoal/45 hover:text-charcoal/75 transition-colors cursor-pointer"
+                 >
+                   ¿Qué es EstadoRed? Conoce nuestra visión y estatutos
+                 </button>
+               </div>
+            </form>
+          )}
+
+          {/* FASE 2: INVITACIÓN TRAS RESPONDER */}
+          {onboardingFase === 'invitacion_registro' && (
+            <div className="w-full flex flex-col gap-4 pt-4 animate-in fade-in zoom-in-95 duration-350 shrink-0 text-center">
+               <div className="w-12 h-12 rounded-full bg-palmgreen/10 border border-palmgreen/30 flex items-center justify-center mx-auto text-palmgreen">
+                 <CheckCircle2 className="w-6 h-6" />
+               </div>
+               
+               <div>
+                 <h2 className="font-serif text-charcoal text-lg sm:text-xl font-black mb-1">¡Tu respuesta ha sido registrada!</h2>
+                 <p className="text-xs text-charcoal/65 font-medium">Tu visión ya forma parte de la consulta cívica abierta.</p>
+               </div>
+
+               <div className="p-4 bg-creambg/80 border border-warmgray-dark rounded-2xl text-center shadow-sm">
+                 <p className="text-[11px] uppercase tracking-wider font-bold text-charcoal/60 mb-1.5">¿Quieres registrarte en EstadoRed?</p>
+                 <p className="font-serif text-sm sm:text-base font-bold text-sandbrown-dark leading-snug">
+                   "Regístrate para construir el futuro juntos. #NosEncontraremosPronto!"
+                 </p>
+               </div>
+
+               <div className="flex flex-col sm:flex-row gap-2.5 w-full mt-1">
+                 <button 
+                   type="button" 
+                   onClick={() => setOnboardingFase('sesion_terminada')}
+                   className="stone-btn px-4 py-3.5 bg-warmgray/60 hover:bg-warmgray text-charcoal/80 rounded-xl transition-all text-[11px] font-black uppercase tracking-wider w-full sm:w-1/2 order-2 sm:order-1 cursor-pointer"
+                 >
+                   No por ahora
+                 </button>
+                 <button 
+                   type="button" 
+                   onClick={() => { setOnboardingFase('alias'); setErrorLogin(''); }}
+                   className="stone-btn px-4 py-3.5 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl transition-all text-[11px] font-black uppercase tracking-wider shadow-md shadow-sandbrown/20 w-full sm:w-1/2 order-1 sm:order-2 cursor-pointer"
+                 >
+                   Sí, quiero registrarme
+                 </button>
+               </div>
+            </div>
+          )}
+
+          {/* FASE 3: SESIÓN TERMINADA PARA QUIENES NO DESEAN REGISTRARSE */}
+          {onboardingFase === 'sesion_terminada' && (
+            <div className="w-full flex flex-col gap-4 pt-4 animate-in fade-in zoom-in-95 duration-350 shrink-0 text-center">
+               <h2 className="font-serif text-charcoal text-xl font-black mb-1">Sesión Finalizada</h2>
+               <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed max-w-sm mx-auto">
+                 Tu opinión sobre los 10 mil millones de dólares ha quedado registrada en la red cívica soberana. ¡Gracias por participar!
+               </p>
+               <p className="text-[11px] text-charcoal/50 italic">
+                 Las personas pueden responder las veces que lo deseen.
+               </p>
+
+               <div className="flex flex-col gap-2.5 w-full mt-2">
+                 <button 
+                   type="button" 
+                   onClick={() => {
+                     setRespuesta10k('');
+                     setRespuesta10kDocId(null);
+                     setOnboardingFase('pregunta_10k');
+                   }}
+                   className="stone-btn w-full px-4 py-3.5 bg-charcoal hover:bg-charcoal/90 text-white rounded-xl transition-all font-black uppercase tracking-wider text-[11px] shadow-md cursor-pointer"
+                 >
+                   Responder nuevamente / Volver al inicio
+                 </button>
+                 <button 
+                   type="button" 
+                   onClick={() => { setOnboardingFase('alias'); setErrorLogin(''); }}
+                   className="text-xs font-bold text-sandbrown hover:text-sandbrown-dark underline decoration-sandbrown/40 pt-1 cursor-pointer"
+                 >
+                   O crear un alias y registrarme
+                 </button>
+               </div>
+            </div>
+          )}
+
+          {/* FASE 4: INGRESO DE ALIAS (Verifica si ya existe o crea nuevo) */}
+          {onboardingFase === 'alias' && (
+            <form onSubmit={checkAliasExists} className="w-full flex flex-col gap-4 pt-2 animate-in fade-in zoom-in-95 duration-350 shrink-0">
+               <h2 className="font-serif text-charcoal text-xl font-black mb-0.5">Identificación de Nodo</h2>
+               <p className="text-xs text-charcoal/60 font-medium">Ingresa tu alias para acceder a tu cuenta o registrar tu nuevo nodo.</p>
+               
+               <input 
+                 type="text" 
+                 placeholder="nombre de usuario o alias" 
+                 value={aliasLogin}
+                 onChange={(e) => { setAliasLogin(e.target.value); setErrorLogin(''); }}
+                 className="w-full bg-charcoal/5 border-none rounded-xl px-5 py-4 text-center text-lg md:text-xl font-bold text-charcoal placeholder-charcoal/30 focus:outline-none focus:bg-charcoal/10 transition-all font-serif"
+                 autoFocus
+               />
+               
+               {errorLogin && <p className="text-rust text-xs text-center font-bold">{errorLogin}</p>}
+               
+               <div className="flex gap-2.5 w-full">
+                 <button 
+                   type="button" 
+                   onClick={() => setOnboardingFase('pregunta_10k')} 
+                   className="stone-btn px-4 py-3.5 bg-warmgray/60 text-charcoal/80 hover:bg-warmgray rounded-xl transition-all w-1/3 text-[11px] font-black uppercase tracking-widest cursor-pointer"
                  >
                    Volver
                  </button>
                  <button 
                    type="submit" 
-                   className="stone-btn px-4 py-4 bg-sandbrown hover:bg-sandbrown-dark text-white border border-sandbrown/20 rounded-xl transition-all w-2/3 font-black shadow-md shadow-sandbrown/20 uppercase tracking-widest text-[11px]"
+                   disabled={isLoggingIn || !aliasLogin.trim()}
+                   className="stone-btn w-2/3 px-4 py-3.5 bg-charcoal hover:bg-charcoal/90 text-white rounded-xl transition-all font-black shadow-md shadow-charcoal/20 uppercase tracking-widest text-[11px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                  >
-                   Ingresar a la Red
+                   {isLoggingIn ? 'Verificando...' : 'Continuar'}
+                 </button>
+               </div>
+            </form>
+          )}
+
+          {/* FASE 5: INGRESO CON CONTRASEÑA (Para usuario existente) */}
+          {onboardingFase === 'password_login' && (
+            <form onSubmit={manejarLogin} className="w-full flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-350 shrink-0">
+               <h2 className="font-serif text-charcoal text-xl md:text-2xl font-black mb-1">Bienvenido de nuevo</h2>
+               <p className="text-xs text-charcoal/60 mb-2 font-medium">Ingresa tu contraseña para el nodo <strong className="text-sandbrown">@{aliasLogin}</strong></p>
+               
+               <div className="relative w-full">
+                 <input 
+                   type={showPassword ? "text" : "password"} 
+                   placeholder="Tu Contraseña..." 
+                   value={passwordLogin}
+                   onChange={(e) => { setPasswordLogin(e.target.value); setErrorLogin(''); }}
+                   className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium pr-12"
+                   autoFocus
+                 />
+                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-charcoal/50 hover:text-charcoal transition-colors">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                 </button>
+               </div>
+               
+               {errorLogin && <p className="text-rust text-xs text-left px-2 font-bold bg-rust/10 py-2 rounded-lg">{errorLogin}</p>}
+               
+               <div className="flex gap-3 w-full mt-2">
+                 <button 
+                   type="button" 
+                   onClick={() => setOnboardingFase('alias')} 
+                   className="stone-btn px-4 py-4 bg-warmgray/60 text-charcoal/80 hover:bg-warmgray border border-warmgray-dark rounded-xl transition-all w-1/3 text-[11px] font-black uppercase tracking-widest cursor-pointer"
+                 >
+                   Atrás
+                 </button>
+                 <button 
+                   type="submit" 
+                   disabled={isLoggingIn}
+                   className="stone-btn px-4 py-4 bg-sandbrown hover:bg-sandbrown-dark text-white border border-sandbrown/20 rounded-xl transition-all w-2/3 font-black shadow-md shadow-sandbrown/20 uppercase tracking-widest text-[11px] cursor-pointer"
+                 >
+                   {isLoggingIn ? 'Ingresando...' : 'Ingresar a la Red'}
+                 </button>
+               </div>
+            </form>
+          )}
+
+          {/* FASE 6: TERRITORIO / BARRIO (Para registro nuevo) */}
+          {onboardingFase === 'barrio_registro' && (
+            <form onSubmit={processBarrio} className="w-full flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-350 shrink-0">
+               <h2 className="font-serif text-charcoal text-xl md:text-2xl font-black mb-1">Tu Territorio</h2>
+               <p className="text-xs text-charcoal/60 mb-2 font-medium">¿En qué barrio o comunidad vives? Esto te conectará con tu red más cercana.</p>
+               
+               <input 
+                 type="text" 
+                 placeholder="Ej. Sopocachi, Plan 3000, Obrajes..." 
+                 value={barrioLogin}
+                 onChange={(e) => { setBarrioLogin(e.target.value); setErrorLogin(''); }}
+                 className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-palmgreen focus:ring-2 focus:ring-palmgreen/20 transition-all font-medium"
+                 autoFocus
+               />
+               
+               {errorLogin && <p className="text-rust text-xs text-left px-2 font-bold bg-rust/10 py-2 rounded-lg">{errorLogin}</p>}
+               
+               <div className="flex gap-3 w-full mt-2">
+                 <button 
+                   type="button" 
+                   onClick={() => setOnboardingFase('alias')} 
+                   className="stone-btn px-4 py-4 bg-warmgray/60 text-charcoal/80 hover:bg-warmgray border border-warmgray-dark rounded-xl transition-all w-1/3 text-[11px] font-black uppercase tracking-widest cursor-pointer"
+                 >
+                   Atrás
+                 </button>
+                 <button 
+                   type="submit" 
+                   disabled={!barrioLogin.trim()}
+                   className="stone-btn px-4 py-4 bg-palmgreen hover:bg-palmgreen-dark text-white border border-palmgreen/20 rounded-xl transition-all w-2/3 font-black shadow-md shadow-palmgreen/20 uppercase tracking-widest text-[11px] disabled:opacity-50 cursor-pointer"
+                 >
+                   Continuar
+                 </button>
+               </div>
+            </form>
+          )}
+
+          {/* FASE 7: PASSWORD PARA NUEVO REGISTRO */}
+          {onboardingFase === 'password_registro' && (
+            <form onSubmit={registrarNuevoUsuario} className="w-full flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-350 shrink-0">
+               <h2 className="font-serif text-charcoal text-xl md:text-2xl font-black mb-1">Protege tu Nodo</h2>
+               <p className="text-xs text-charcoal/60 mb-2 font-medium">Crea una contraseña segura para <strong className="text-sandbrown">@{aliasLogin}</strong></p>
+               
+               <div className="relative w-full">
+                 <input 
+                   type={showPassword ? "text" : "password"} 
+                   placeholder="Mínimo 6 caracteres..." 
+                   value={passwordLogin}
+                   onChange={(e) => { setPasswordLogin(e.target.value); setErrorLogin(''); }}
+                   className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-xl px-5 py-4 text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium pr-12"
+                   autoFocus
+                 />
+                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-charcoal/50 hover:text-charcoal transition-colors">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                 </button>
+               </div>
+               
+               {errorLogin && <p className="text-rust text-xs text-left px-2 font-bold bg-rust/10 py-2 rounded-lg">{errorLogin}</p>}
+               
+               <div className="flex gap-3 w-full mt-2">
+                 <button 
+                   type="button" 
+                   onClick={() => setOnboardingFase('barrio_registro')} 
+                   className="stone-btn px-4 py-4 bg-warmgray/60 text-charcoal/80 hover:bg-warmgray border border-warmgray-dark rounded-xl transition-all w-1/3 text-[11px] font-black uppercase tracking-widest cursor-pointer"
+                 >
+                   Atrás
+                 </button>
+                 <button 
+                   type="submit" 
+                   disabled={isLoggingIn}
+                   className="stone-btn px-4 py-4 bg-sandbrown hover:bg-sandbrown-dark text-white border border-sandbrown/20 rounded-xl transition-all w-2/3 font-black shadow-md shadow-sandbrown/20 uppercase tracking-widest text-[11px] cursor-pointer"
+                 >
+                   {isLoggingIn ? 'Creando...' : 'Crear Perfil e Ingresar'}
                  </button>
                </div>
             </form>

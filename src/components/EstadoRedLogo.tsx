@@ -26,7 +26,7 @@ export default function EstadoRedLogo({
       {/* Hand-drawn Woven Lines (Knot) SVG */}
       <svg 
         viewBox="0 0 540 160" 
-        className="w-full h-auto max-w-[340px] drop-shadow-[0_2px_4px_rgba(43,41,39,0.05)]"
+        className="w-full h-auto max-w-[210px] sm:max-w-[280px] drop-shadow-[0_2px_4px_rgba(43,41,39,0.05)]"
         fill="none" 
         strokeLinecap="round" 
         strokeLinejoin="round"
@@ -61,14 +61,15 @@ export default function EstadoRedLogo({
       </svg>
 
       {showText && (
-        <div className={`mt-4 text-center ${lightText ? 'text-white' : 'text-charcoal'}`}>
+        <div className={`mt-2 text-center ${lightText ? 'text-white' : 'text-charcoal'}`}>
           <h1 className={`${textSizes[textSize]} font-medium tracking-tight font-sans`}>
             <span>Estado</span>
             <span className="font-light text-charcoal/70">Red</span>
           </h1>
-          <p className={`text-[9px] sm:text-xs md:text-sm tracking-[0.1em] sm:tracking-[0.2em] uppercase font-sans mt-2 opacity-70 ${lightText ? 'text-white/80' : 'text-charcoal/80'}`}>
-            Gobernanza Comunitaria & Red Democrática
-          </p>
+          <div className={`text-[9px] sm:text-xs md:text-sm tracking-[0.12em] sm:tracking-[0.2em] uppercase font-sans mt-1 opacity-70 ${lightText ? 'text-white/80' : 'text-charcoal/80'} flex flex-col items-center leading-tight sm:leading-snug space-y-0.5`}>
+            <span>Gobernanza</span>
+            <span>Red Democrática</span>
+          </div>
         </div>
       )}
     </div>

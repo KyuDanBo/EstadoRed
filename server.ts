@@ -243,6 +243,150 @@ Por favor responder a este mensaje.
     }
   });
 
+  // API Route: Obtener lista de preguntas de consulta
+  app.get("/api/preguntas-consultas", async (_req, res) => {
+    try {
+      const defaults = [
+        {
+          id: 'gobierno_rodrigo_paz',
+          titulo: '¿Qué opinas de las medidas adoptadas por el Gobierno de Rodrigo Paz?',
+          subtitulo: 'Aporta tu postura o análisis cívico de forma libre y soberana.',
+          categoria: 'Evaluación de Gestión',
+          activa: true,
+          visiblePublico: true,
+          orden: 1,
+          createdAtMs: 1727250000000
+        },
+        {
+          id: '10k_millones',
+          titulo: '¿Qué harías con los 10.000.000.000 $ (Diez mil millones de dólares americanos) que promete el Gobierno nacional?',
+          subtitulo: 'No necesitas registrarte para responder.',
+          categoria: 'Consulta Soberana',
+          activa: true,
+          visiblePublico: true,
+          orden: 2,
+          createdAtMs: 1727200000000
+        }
+      ];
+
+      const map = new Map<string, any>();
+      defaults.forEach(q => map.set(q.id, q));
+
+      if (dbExt) {
+        const snap = await dbExt.collection("preguntas_consultas").get();
+        snap.docs.forEach((d: any) => {
+          const existing = map.get(d.id) || {};
+          map.set(d.id, { ...existing, id: d.id, ...d.data() });
+        });
+      }
+
+      const list = Array.from(map.values());
+      list.sort((a: any, b: any) => {
+        const timeB = b.createdAtMs || (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0) || (b.orden ? (3 - b.orden) * 1000 : 0);
+        const timeA = a.createdAtMs || (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0) || (a.orden ? (3 - a.orden) * 1000 : 0);
+        return timeB - timeA;
+      });
+
+      res.json({ success: true, preguntas: list });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // API Route: Guardar respuesta a cualquier consulta cívica (10k o nuevas)
+  app.post("/api/respuestas-consultas", async (req, res) => {
+    try {
+      const { id, preguntaId, respuesta, userId, alias, status, fecha, hora, fechaHoraISO, timestampMs, esAnonima } = req.body;
+      if (!respuesta || typeof respuesta !== "string") {
+        return res.status(400).json({ success: false, error: "Respuesta inválida" });
+      }
+      const qId = preguntaId || '10k_millones';
+      const docId = id || `resp_${qId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      
+      const now = new Date();
+      const payload: any = {
+        id: docId,
+        preguntaId: qId,
+        respuesta: respuesta.trim(),
+        userId: userId || null,
+        alias: alias || null,
+        status: status || (userId ? "vinculado" : "anonima"),
+        esAnonima: typeof esAnonima === 'boolean' ? esAnonima : !userId,
+        fecha: fecha || now.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        hora: hora || now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        fechaHoraISO: fechaHoraISO || now.toISOString(),
+        timestampMs: timestampMs || now.getTime(),
+        createdAt: FieldValue.serverTimestamp()
+      };
+
+      res.json({ success: true, id: docId });
+
+      if (dbExt) {
+        Promise.race([
+          Promise.all([
+            dbExt.collection("respuestas_consultas").doc(docId).set(payload, { merge: true }),
+            // Si es la de 10k, sincronizamos también con la colección histórica
+            qId === '10k_millones' ? dbExt.collection("respuestas_10k_millones").doc(docId).set(payload, { merge: true }) : Promise.resolve()
+          ]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout firestore admin")), 3000))
+        ]).catch(err => console.warn("Firestore admin background write:", err.message));
+      }
+    } catch (error: any) {
+      console.error("Error en /api/respuestas-consultas:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // API Route: Descargar CSV específico por pregunta (o global)
+  app.get("/api/respuestas-consultas/csv", async (req, res) => {
+    try {
+      const qId = req.query.preguntaId as string;
+      let items: any[] = [];
+      if (dbExt) {
+        let queryRef: any = dbExt.collection("respuestas_consultas");
+        if (qId) {
+          queryRef = queryRef.where("preguntaId", "==", qId);
+        }
+        const snap = await queryRef.orderBy("timestampMs", "desc").limit(5000).get();
+        items = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+        // Si se pidió la 10k_millones y la colección nueva tiene menos datos, combinar con histórica
+        if ((!qId || qId === '10k_millones') && items.length === 0) {
+          const oldSnap = await dbExt.collection("respuestas_10k_millones").orderBy("timestampMs", "desc").limit(5000).get();
+          items = oldSnap.docs.map((d: any) => ({ id: d.id, preguntaId: '10k_millones', ...d.data() }));
+        }
+      }
+
+      const headers = ["ID", "ID Pregunta", "Fecha", "Hora", "Es Anonima", "Alias", "User ID", "Estado", "Propuesta"];
+      const escapeCsv = (str: any) => {
+        if (str === null || str === undefined) return '""';
+        const cleaned = String(str).replace(/"/g, '""').replace(/(\r\n|\n|\r)/g, ' ');
+        return `"${cleaned}"`;
+      };
+
+      const rows = items.map(item => [
+        escapeCsv(item.id),
+        escapeCsv(item.preguntaId || "10k_millones"),
+        escapeCsv(item.fecha || ""),
+        escapeCsv(item.hora || ""),
+        escapeCsv(item.esAnonima ? "Si" : "No"),
+        escapeCsv(item.alias || "Anonimo"),
+        escapeCsv(item.userId || ""),
+        escapeCsv(item.status || "anonima"),
+        escapeCsv(item.respuesta || "")
+      ].join(","));
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="respuestas_consulta_${qId || 'todas'}_${new Date().toISOString().slice(0, 10)}.csv"`);
+      return res.status(200).send(csvContent);
+    } catch (error: any) {
+      console.error("Error al exportar CSV /api/respuestas-consultas/csv:", error);
+      res.status(500).send("Error generando CSV");
+    }
+  });
+
   // API Route: Save or link response to the 10k million dollars question
   app.post("/api/respuestas-10k", async (req, res) => {
     try {
@@ -283,11 +427,11 @@ Por favor responder a este mensaje.
     }
   });
 
-  // API Route: List responses to 10k million dollars question
+  // API Route: List responses to 10k million dollars question (JSON)
   app.get("/api/respuestas-10k", async (_req, res) => {
     try {
       if (dbExt) {
-        const snap = await dbExt.collection("respuestas_10k_millones").orderBy("timestampMs", "desc").limit(500).get();
+        const snap = await dbExt.collection("respuestas_10k_millones").orderBy("timestampMs", "desc").limit(1000).get();
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         return res.json({ success: true, count: items.length, items });
       }
@@ -295,6 +439,45 @@ Por favor responder a este mensaje.
     } catch (error: any) {
       console.error("Error al listar /api/respuestas-10k:", error);
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // API Route: Direct download responses in CSV (Excel compatible)
+  app.get("/api/respuestas-10k/csv", async (_req, res) => {
+    try {
+      let items: any[] = [];
+      if (dbExt) {
+        const snap = await dbExt.collection("respuestas_10k_millones").orderBy("timestampMs", "desc").limit(5000).get();
+        items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+
+      // Generar CSV con BOM para compatibilidad perfecta con Excel en español
+      const headers = ["ID", "Fecha", "Hora", "Es Anonima", "Alias", "User ID", "Estado", "Propuesta"];
+      const escapeCsv = (str: any) => {
+        if (str === null || str === undefined) return '""';
+        const cleaned = String(str).replace(/"/g, '""').replace(/(\r\n|\n|\r)/g, ' ');
+        return `"${cleaned}"`;
+      };
+
+      const rows = items.map(item => [
+        escapeCsv(item.id),
+        escapeCsv(item.fecha || ""),
+        escapeCsv(item.hora || ""),
+        escapeCsv(item.esAnonima ? "Si" : "No"),
+        escapeCsv(item.alias || "Anonimo"),
+        escapeCsv(item.userId || ""),
+        escapeCsv(item.status || "anonima"),
+        escapeCsv(item.respuesta || "")
+      ].join(","));
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="respuestas_10k_millones_${new Date().toISOString().slice(0, 10)}.csv"`);
+      return res.status(200).send(csvContent);
+    } catch (error: any) {
+      console.error("Error al generar CSV /api/respuestas-10k/csv:", error);
+      res.status(500).send("Error generando archivo CSV");
     }
   });
 

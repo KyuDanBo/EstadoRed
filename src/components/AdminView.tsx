@@ -24,7 +24,12 @@ import {
   Upload,
   Send,
   Globe,
-  Copy
+  Copy,
+  Download,
+  HelpCircle,
+  Eye,
+  EyeOff,
+  MessageSquare
 } from 'lucide-react';
 import EstructuraSistema from './EstructuraSistema';
 import { BibliotecaDigital } from './BibliotecaDigital';
@@ -32,9 +37,18 @@ import { BibliotecaDigital } from './BibliotecaDigital';
 export default function AdminView() {
   const [stats, setStats] = useState({ users: 0, nodes: 0, proposals: 0, courses: 0, networks: 0 });
   const [loading, setLoading] = useState(true);
-  const [adminTab, setAdminTab] = useState<'control' | 'crear' | 'grafo' | 'configuraciones' | 'documentos' | 'telegram' | 'votaciones' | 'redes'>('control');
+  const [adminTab, setAdminTab] = useState<'control' | 'preguntas' | 'crear' | 'grafo' | 'configuraciones' | 'documentos' | 'telegram' | 'votaciones' | 'redes'>('control');
   const [pendingNodeRequests, setPendingNodeRequests] = useState<any[]>([]);
   const [pendingNetworkRequests, setPendingNetworkRequests] = useState<any[]>([]);
+
+  // Consultas cívicas
+  const [preguntasList, setPreguntasList] = useState<any[]>([]);
+  const [preguntaSeleccionada, setPreguntaSeleccionada] = useState<any | null>(null);
+  const [respuestasPregunta, setRespuestasPregunta] = useState<any[]>([]);
+  const [nuevaPreguntaTitulo, setNuevaPreguntaTitulo] = useState('');
+  const [nuevaPreguntaSubtitulo, setNuevaPreguntaSubtitulo] = useState('');
+  const [nuevaPreguntaCategoria, setNuevaPreguntaCategoria] = useState('Consulta Soberana');
+  const [guardandoPregunta, setGuardandoPregunta] = useState(false);
 
   // List of active items for deletion/viewing
   const [activeCoursesList, setActiveCoursesList] = useState<any[]>([]);
@@ -42,6 +56,7 @@ export default function AdminView() {
   const [activeNetworksList, setActiveNetworksList] = useState<any[]>([]);
   const [activeUsersList, setActiveUsersList] = useState<any[]>([]);
   const [activeProposalsList, setActiveProposalsList] = useState<any[]>([]);
+  const [respuestas10kList, setRespuestas10kList] = useState<any[]>([]);
 
   // --- Formulario Creación de Nodos Colectivos ---
   const [newNodeName, setNewNodeName] = useState('');
@@ -211,6 +226,60 @@ export default function AdminView() {
       setStats(prev => ({ ...prev, proposals: list.length }));
     });
 
+    const unsub10k = onSnapshot(collection(db, 'respuestas_10k_millones'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setRespuestas10kList(list);
+    });
+
+    const unsubPreguntas = onSnapshot(collection(db, 'preguntas_consultas'), async (snap) => {
+      const p1 = {
+        id: '10k_millones',
+        titulo: '¿Qué harías con los 10.000.000.000 $ (Diez mil millones de dólares americanos) que promete el Gobierno nacional?',
+        subtitulo: 'No necesitas registrarte para responder.',
+        categoria: 'Consulta Soberana',
+        activa: true,
+        visiblePublico: true,
+        orden: 1,
+        createdAtMs: 1727200000000,
+        createdAt: new Date()
+      };
+      const p2 = {
+        id: 'gobierno_rodrigo_paz',
+        titulo: '¿Qué opinas de las medidas adoptadas por el Gobierno de Rodrigo Paz?',
+        subtitulo: 'Aporta tu postura o análisis cívico de forma libre y soberana.',
+        categoria: 'Evaluación de Gestión',
+        activa: true,
+        visiblePublico: true,
+        orden: 2,
+        createdAtMs: 1727250000000,
+        createdAt: new Date()
+      };
+
+      if (snap.empty) {
+        try {
+          await setDoc(doc(db, 'preguntas_consultas', p1.id), p1);
+          await setDoc(doc(db, 'preguntas_consultas', p2.id), p2);
+        } catch (e) {
+          console.warn("Bootstrap preguntas:", e);
+        }
+      } else {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Ordenar la más reciente primero
+        list.sort((a: any, b: any) => {
+          const timeB = b.createdAtMs || (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) || (b.orden ? b.orden * 1000 : 0);
+          const timeA = a.createdAtMs || (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0) || (a.orden ? a.orden * 1000 : 0);
+          return timeB - timeA;
+        });
+        setPreguntasList(list);
+
+        // Asegurar que la pregunta de Rodrigo Paz esté en la colección
+        const hasRodrigoPaz = list.some(x => x.id === 'gobierno_rodrigo_paz');
+        if (!hasRodrigoPaz) {
+          setDoc(doc(db, 'preguntas_consultas', p2.id), p2).catch(err => console.warn(err));
+        }
+      }
+    });
+
     const loadData = async () => {
       try {
         // Config
@@ -240,6 +309,8 @@ export default function AdminView() {
       unsubN();
       unsubU();
       unsubP();
+      unsub10k();
+      unsubPreguntas();
     };
   }, []);
 
@@ -609,6 +680,68 @@ export default function AdminView() {
     );
   }
 
+  const handleTogglePreguntaVisibilidad = async (preguntaId: string, currentVisibility: boolean) => {
+    try {
+      await updateDoc(doc(db, 'preguntas_consultas', preguntaId), {
+        visiblePublico: !currentVisibility
+      });
+      setSuccessMsg(`Visibilidad de la pregunta actualizada (${!currentVisibility ? 'Visible al público' : 'Oculta al público'})`);
+      if (preguntaSeleccionada && preguntaSeleccionada.id === preguntaId) {
+        setPreguntaSeleccionada((prev: any) => ({ ...prev, visiblePublico: !currentVisibility }));
+      }
+    } catch (e: any) {
+      console.error("Error al cambiar visibilidad:", e);
+      alert("Error al actualizar visibilidad");
+    }
+  };
+
+  const handleCrearNuevaPregunta = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevaPreguntaTitulo.trim()) return;
+    setGuardandoPregunta(true);
+    try {
+      const qId = `preg_${Date.now()}`;
+      const nowMs = Date.now();
+      const nuevaQ = {
+        id: qId,
+        titulo: nuevaPreguntaTitulo.trim(),
+        subtitulo: nuevaPreguntaSubtitulo.trim() || 'No necesitas registrarte para responder.',
+        categoria: nuevaPreguntaCategoria.trim() || 'Consulta Soberana',
+        activa: true,
+        visiblePublico: true,
+        orden: preguntasList.length + 1,
+        createdAtMs: nowMs,
+        createdAt: new Date()
+      };
+      await setDoc(doc(db, 'preguntas_consultas', qId), nuevaQ);
+      setNuevaPreguntaTitulo('');
+      setNuevaPreguntaSubtitulo('');
+      setSuccessMsg('¡Nueva pregunta cívica agregada y publicada con éxito!');
+    } catch (e: any) {
+      console.error("Error al crear pregunta:", e);
+      alert("Error al crear la pregunta");
+    } finally {
+      setGuardandoPregunta(false);
+    }
+  };
+
+  const handleVerDetallesPregunta = async (pregunta: any) => {
+    setPreguntaSeleccionada(pregunta);
+    try {
+      // Cargar respuestas para esta pregunta
+      if (pregunta.id === '10k_millones') {
+        setRespuestasPregunta(respuestas10kList);
+      } else {
+        const snap = await getDocs(query(collection(db, 'respuestas_consultas'), where('preguntaId', '==', pregunta.id)));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a: any, b: any) => (b.timestampMs || 0) - (a.timestampMs || 0));
+        setRespuestasPregunta(list);
+      }
+    } catch (err) {
+      console.error("Error cargando respuestas de pregunta:", err);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
@@ -623,6 +756,16 @@ export default function AdminView() {
           }`}
         >
           <Database className="w-3.5 h-3.5" /> Métricas
+        </button>
+        <button
+          onClick={() => { setAdminTab('preguntas'); setSuccessMsg(null); }}
+          className={`flex-1 min-w-[80px] py-2 text-center text-[10px] font-bold uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${
+            adminTab === 'preguntas' 
+              ? 'bg-[#FAF9F5] text-sandbrown-dark shadow-xs border border-[#ECE8DE]' 
+              : 'text-charcoal/50 hover:bg-[#FAF9F5]/40'
+          }`}
+        >
+          <HelpCircle className="w-3.5 h-3.5 text-sandbrown" /> Consultas ({preguntasList.length})
         </button>
         <button
           onClick={() => { setAdminTab('redes'); setSuccessMsg(null); }}
@@ -718,35 +861,76 @@ export default function AdminView() {
           {loading ? (
             <div className="py-10 text-center text-charcoal/50 text-sm animate-pulse">Sincronizando Métrica Global...</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#FAF9F5] border border-[#ECE8DE] rounded-2xl p-6 text-center shadow-inner relative overflow-hidden group">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-[#FAF9F5] border border-[#ECE8DE] rounded-2xl p-5 text-center shadow-inner relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
-                  <Users className="w-20 h-20" />
+                  <Users className="w-16 h-16" />
                 </div>
-                <Users className="w-6 h-6 text-skyblue mx-auto mb-2" />
-                <p className="text-3xl font-black text-charcoal font-serif">{stats.users}</p>
-                <p className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest mt-1">Soberanos Activos</p>
+                <Users className="w-5 h-5 text-skyblue mx-auto mb-1.5" />
+                <p className="text-2xl font-black text-charcoal font-serif">{stats.users}</p>
+                <p className="text-[9.5px] font-bold text-charcoal/50 uppercase tracking-widest mt-1">Soberanos Activos</p>
               </div>
 
-              <div className="bg-[#FAF9F5] border border-[#ECE8DE] rounded-2xl p-6 text-center shadow-inner relative overflow-hidden group">
+              <div className="bg-[#FAF9F5] border border-[#ECE8DE] rounded-2xl p-5 text-center shadow-inner relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
-                  <Network className="w-20 h-20" />
+                  <Network className="w-16 h-16" />
                 </div>
-                <Network className="w-6 h-6 text-sandbrown mx-auto mb-2" />
-                <p className="text-3xl font-black text-charcoal font-serif">{stats.nodes}</p>
-                <p className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest mt-1">Nodos Colectivos</p>
+                <Network className="w-5 h-5 text-sandbrown mx-auto mb-1.5" />
+                <p className="text-2xl font-black text-charcoal font-serif">{stats.nodes}</p>
+                <p className="text-[9.5px] font-bold text-charcoal/50 uppercase tracking-widest mt-1">Nodos Colectivos</p>
               </div>
 
-              <div className="bg-[#FAF9F5] border border-[#ECE8DE] rounded-2xl p-6 text-center shadow-inner relative overflow-hidden group">
+              <div className="bg-[#FAF9F5] border border-[#ECE8DE] rounded-2xl p-5 text-center shadow-inner relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
-                  <Activity className="w-20 h-20" />
+                  <Activity className="w-16 h-16" />
                 </div>
-                <Activity className="w-6 h-6 text-palmgreen mx-auto mb-2" />
-                <p className="text-3xl font-black text-charcoal font-serif">{stats.proposals}</p>
-                <p className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest mt-1">Propuestas Emitidas</p>
+                <Activity className="w-5 h-5 text-palmgreen mx-auto mb-1.5" />
+                <p className="text-2xl font-black text-charcoal font-serif">{stats.proposals}</p>
+                <p className="text-[9.5px] font-bold text-charcoal/50 uppercase tracking-widest mt-1">Propuestas Emitidas</p>
+              </div>
+
+              <div className="bg-[#FAF9F5] border border-sandbrown/30 rounded-2xl p-5 text-center shadow-inner relative overflow-hidden group bg-gradient-to-b from-[#FAF9F5] to-sandbrown/5">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
+                  <BrainCircuit className="w-16 h-16 text-sandbrown" />
+                </div>
+                <FileSpreadsheet className="w-5 h-5 text-sandbrown mx-auto mb-1.5" />
+                <p className="text-2xl font-black text-sandbrown-dark font-serif">{respuestas10kList.length}</p>
+                <p className="text-[9.5px] font-bold text-sandbrown/80 uppercase tracking-widest mt-1">Respuestas $10k Millones</p>
               </div>
             </div>
           )}
+
+          {/* CAJA DE DESCARGA DIRECTA DE LA BASE DE DATOS ($10k MILLONES) */}
+          <div className="bg-sandbrown/5 border border-sandbrown/25 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[9px] font-bold tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-sandbrown/15 text-sandbrown-dark border border-sandbrown/20 inline-block mb-1">
+                Consulta Nacional Soberana
+              </span>
+              <h4 className="font-serif font-black text-sm text-charcoal flex items-center gap-2">
+                <Database className="w-4 h-4 text-sandbrown" /> Base de Datos de Respuestas ($10.000.000.000)
+              </h4>
+              <p className="text-[11px] text-charcoal/65 leading-relaxed max-w-xl">
+                Contiene todas las propuestas ciudadanas recibidas (anónimas y con alias), registradas con fecha y hora exacta. Puedes descargarlas para análisis estadístico, tabulación o lectura.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto shrink-0">
+              <a
+                href="/api/respuestas-10k/csv"
+                download
+                className="px-4 py-2.5 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center gap-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4" /> Descargar Excel / CSV
+              </a>
+              <a
+                href="/api/respuestas-10k"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-2.5 bg-white hover:bg-warmgray/40 text-charcoal border border-[#ECE8DE] rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                Ver JSON
+              </a>
+            </div>
+          </div>
 
           {/* SECCIÓN DE INICIALIZACIÓN Y LIMPIEZA PARA PRODUCCIÓN */}
           <div className="mt-4 border-t border-red-200/50 bg-red-50/15 rounded-2xl p-5 md:p-6 space-y-4">
@@ -939,6 +1123,210 @@ export default function AdminView() {
             <button className="stone-btn px-4 py-2 bg-white text-skyblue-dark border border-skyblue border-b-4 hover:border-b hover:translate-y-[3px] text-xs font-bold uppercase tracking-wider rounded-lg transition shrink-0 cursor-pointer">
               Exportar Datos de Red (CSV)
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA: CONSULTAS CIUDADANAS (Gestión de Preguntas de Portada y Descarga de Bases de Datos) */}
+      {adminTab === 'preguntas' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="bg-white/95 border border-[#ECE8DE] stone-card p-6 md:p-8 shadow-[0_4px_24px_rgba(43,41,39,0.03)] rounded-3xl space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#ECE8DE]">
+              <div>
+                <h3 className="font-serif font-black text-xl text-charcoal flex items-center gap-2">
+                  <HelpCircle className="w-6 h-6 text-sandbrown" /> Consultas de la Pantalla Principal
+                </h3>
+                <p className="text-xs text-charcoal/60 mt-1 max-w-xl">
+                  Administra las preguntas que se presentan al público al ingresar. Puedes decidir si mostrarlas u ocultarlas, ver las opiniones emitidas y descargar la base de datos de respuestas en Excel / CSV.
+                </p>
+              </div>
+
+              <a
+                href="/api/respuestas-consultas/csv"
+                download
+                className="px-4 py-2.5 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center gap-2 cursor-pointer self-start md:self-auto shrink-0"
+              >
+                <Download className="w-4 h-4" /> Descargar Todas las Respuestas (CSV)
+              </a>
+            </div>
+
+            {/* LISTA DE PREGUNTAS */}
+            <div className="grid grid-cols-1 gap-4">
+              {preguntasList.map((p, idx) => (
+                <div 
+                  key={p.id}
+                  className={`border rounded-2xl p-5 transition-all bg-[#FAF9F5] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+                    p.visiblePublico ? 'border-sandbrown/40 shadow-xs' : 'border-gray-200 opacity-60'
+                  }`}
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9.5px] font-bold tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-sandbrown/15 text-sandbrown-dark border border-sandbrown/20">
+                        Pregunta #{idx + 1} • {p.categoria || 'Consulta Soberana'}
+                      </span>
+                      {p.visiblePublico ? (
+                        <span className="text-[9.5px] font-bold uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                          <Eye className="w-3 h-3" /> Visible al público
+                        </span>
+                      ) : (
+                        <span className="text-[9.5px] font-bold uppercase px-2 py-0.5 rounded-md bg-gray-200 text-gray-700 flex items-center gap-1">
+                          <EyeOff className="w-3 h-3" /> Oculta al público
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="font-serif font-black text-sm md:text-base text-charcoal leading-snug">
+                      {p.titulo}
+                    </h4>
+                    {p.subtitulo && (
+                      <p className="text-[11px] text-charcoal/60">{p.subtitulo}</p>
+                    )}
+                  </div>
+
+                  {/* Acciones para el Administrador */}
+                  <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end flex-wrap">
+                    <button
+                      onClick={() => handleTogglePreguntaVisibilidad(p.id, p.visiblePublico !== false)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer border ${
+                        p.visiblePublico !== false 
+                          ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {p.visiblePublico !== false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {p.visiblePublico !== false ? 'Ocultar al público' : 'Mostrar al público'}
+                    </button>
+
+                    <button
+                      onClick={() => handleVerDetallesPregunta(p)}
+                      className="px-3 py-2 bg-charcoal text-white hover:bg-black rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" /> Ver Respuestas
+                    </button>
+
+                    <a
+                      href={p.id === '10k_millones' ? '/api/respuestas-10k/csv' : `/api/respuestas-consultas/csv?preguntaId=${p.id}`}
+                      download
+                      className="px-3 py-2 bg-white hover:bg-[#FAF9F5] text-charcoal border border-[#ECE8DE] rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Download className="w-3.5 h-3.5 text-sandbrown" /> CSV
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* FORMULARIO: CREAR NUEVA PREGUNTA PARA LA PORTADA */}
+            <div className="mt-8 pt-6 border-t border-[#ECE8DE] space-y-4">
+              <h4 className="font-serif font-black text-sm text-charcoal flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-palmgreen" /> Añadir Nueva Pregunta a la Portada
+              </h4>
+              <p className="text-xs text-charcoal/60">
+                Las preguntas activas se mostrarán en la pantalla principal para que cualquier persona pueda contestarlas de inmediato con o sin registro.
+              </p>
+
+              <form onSubmit={handleCrearNuevaPregunta} className="space-y-3 bg-[#FAF9F5] p-5 rounded-2xl border border-[#ECE8DE]">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] uppercase tracking-wider font-extrabold text-charcoal/60">Pregunta completa:</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej. ¿Qué opinas sobre nacionalizar el litio versus asociarse con el sector privado?"
+                      value={nuevaPreguntaTitulo}
+                      onChange={(e) => setNuevaPreguntaTitulo(e.target.value)}
+                      className="w-full bg-white border border-[#ECE8DE] rounded-xl p-3 text-xs text-charcoal focus:outline-none focus:border-sandbrown"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-wider font-extrabold text-charcoal/60">Categoría o Etiqueta:</label>
+                    <input
+                      type="text"
+                      value={nuevaPreguntaCategoria}
+                      onChange={(e) => setNuevaPreguntaCategoria(e.target.value)}
+                      placeholder="Ej. Soberanía Económica"
+                      className="w-full bg-white border border-[#ECE8DE] rounded-xl p-3 text-xs text-charcoal focus:outline-none focus:border-sandbrown"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider font-extrabold text-charcoal/60">Subtítulo o Aclaración corta (opcional):</label>
+                  <input
+                    type="text"
+                    value={nuevaPreguntaSubtitulo}
+                    onChange={(e) => setNuevaPreguntaSubtitulo(e.target.value)}
+                    placeholder="Ej. No necesitas registrarte para responder."
+                    className="w-full bg-white border border-[#ECE8DE] rounded-xl p-2.5 text-xs text-charcoal focus:outline-none focus:border-sandbrown"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={guardandoPregunta || !nuevaPreguntaTitulo.trim()}
+                    className="stone-btn px-5 py-2.5 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {guardandoPregunta ? 'Publicando...' : 'Crear y Publicar Pregunta'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* DETALLES Y LISTA DE RESPUESTAS DE LA PREGUNTA SELECCIONADA */}
+            {preguntaSeleccionada && (
+              <div className="mt-8 pt-6 border-t-2 border-sandbrown/20 space-y-4 animate-in fade-in duration-300">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-sandbrown/5 border border-sandbrown/20 p-4 rounded-2xl">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold tracking-widest text-sandbrown">
+                      Respuestas Recibidas ({respuestasPregunta.length})
+                    </span>
+                    <h4 className="font-serif font-black text-sm text-charcoal">
+                      {preguntaSeleccionada.titulo}
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={preguntaSeleccionada.id === '10k_millones' ? '/api/respuestas-10k/csv' : `/api/respuestas-consultas/csv?preguntaId=${preguntaSeleccionada.id}`}
+                      download
+                      className="px-3.5 py-2 bg-sandbrown text-white hover:bg-sandbrown-dark rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Descargar Base de Datos
+                    </a>
+                    <button
+                      onClick={() => setPreguntaSeleccionada(null)}
+                      className="px-3 py-2 bg-white text-charcoal/70 hover:text-charcoal border border-[#ECE8DE] rounded-xl text-xs font-bold uppercase tracking-wider transition"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+
+                {respuestasPregunta.length === 0 ? (
+                  <p className="text-xs text-charcoal/50 text-center py-8 italic font-serif">
+                    Aún no hay respuestas registradas para esta pregunta.
+                  </p>
+                ) : (
+                  <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1 no-scrollbar">
+                    {respuestasPregunta.map((r, i) => (
+                      <div key={r.id || i} className="bg-white border border-[#ECE8DE] p-3.5 rounded-xl shadow-xs space-y-1.5 text-left">
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-charcoal/50">
+                          <span className="font-bold text-sandbrown-dark">
+                            {r.esAnonima || !r.alias ? '👤 Ciudadano Anónimo' : `⚡ @${r.alias}`}
+                          </span>
+                          <span className="font-mono">
+                            {r.fecha || ''} {r.hora || ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-charcoal/85 leading-relaxed font-serif">
+                          "{r.respuesta}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

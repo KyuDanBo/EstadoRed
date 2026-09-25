@@ -13,7 +13,8 @@ import IDCardPreview from './components/IDCardPreview';
 import Dashboard from './components/Dashboard';
 import EstadoRedLogo from './components/EstadoRedLogo';
 import EstatutoInfographic from './components/EstatutoInfographic';
-import { ArrowRight, ArrowLeft, Globe2, CheckCircle2, X, User, Info, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Globe2, CheckCircle2, X, User, Info, Eye, EyeOff, MessageSquare, ShieldAlert, Filter, Sparkles, HelpCircle } from 'lucide-react';
+import { moderarOpinion } from './lib/moderacion';
 
 // =======================================================
 // PREGUNTAS DEL FORMULARIO (Test de Identidad Política)
@@ -116,7 +117,7 @@ const MAPA_IDEOLOGIAS: Record<string, string[]> = {
 export default function App() {
   const navigate = useNavigate();
   // --- MEMORIA DE LA APLICACIÓN (Estado) ---
-  const [pasoActual, setPasoActual] = useState<'bienvenida' | 'seleccion_pais' | 'formulario' | 'completado' | 'moderacion' | 'dashboard' | 'cargando' | 'que_es_estadored'>('cargando');
+  const [pasoActual, setPasoActual] = useState<'bienvenida' | 'seleccion_pais' | 'formulario' | 'completado' | 'moderacion' | 'dashboard' | 'cargando' | 'que_es_estadored' | 'muro_opiniones'>('cargando');
   const [zoomTarget, setZoomTarget] = useState<{lat: number, lng: number, altitude: number, radius?: number} | null>(null);
   const [paisSeleccionado, setPaisSeleccionado] = useState('');
   
@@ -126,17 +127,29 @@ export default function App() {
   const [errorInput, setErrorInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Preguntas dinámicas de consulta para la portada
+  const [preguntasConsultas, setPreguntasConsultas] = useState<any[]>([]);
+  const [respuestasPorPregunta, setRespuestasPorPregunta] = useState<Record<string, string>>({});
+  const [enviandoPorPregunta, setEnviandoPorPregunta] = useState<Record<string, boolean>>({});
+  const [enviadasPorPregunta, setEnviadasPorPregunta] = useState<Record<string, boolean>>({});
+  const [errorPorPregunta, setErrorPorPregunta] = useState<Record<string, string>>({});
+
   // Estados onboarding
   const [onboardingFase, setOnboardingFase] = useState<'pregunta_10k' | 'invitacion_registro' | 'sesion_terminada' | 'alias' | 'password_login' | 'barrio_registro' | 'password_registro'>('pregunta_10k');
+  const [preguntaRespondidaActual, setPreguntaRespondidaActual] = useState<any | null>(null);
   const [respuesta10k, setRespuesta10k] = useState('');
   const [respuesta10kDocId, setRespuesta10kDocId] = useState<string | null>(null);
-  const [enviandoRespuesta10k, setEnviandoRespuesta10k] = useState(false);
-  const [error10k, setError10k] = useState('');
   const [aliasLogin, setAliasLogin] = useState('');
   const [barrioLogin, setBarrioLogin] = useState('');
   const [passwordLogin, setPasswordLogin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorLogin, setErrorLogin] = useState('');
+
+  // Estados Muro de Opiniones Anónimas
+  const [todasLasOpiniones, setTodasLasOpiniones] = useState<any[]>([]);
+  const [filtroModeracionActivo, setFiltroModeracionActivo] = useState(true);
+  const [cargandoMuro, setCargandoMuro] = useState(false);
+  const [filtroMuroPregunta, setFiltroMuroPregunta] = useState<string>('todas');
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [mostrarExplicacion, setMostrarExplicacion] = useState(false);
@@ -158,6 +171,57 @@ export default function App() {
           });
        }
     });
+
+    // Escuchar preguntas de consulta en tiempo real
+    const unsubPreguntas = onSnapshot(collection(db, 'preguntas_consultas'), async (snap) => {
+      const DEFAULT_QUESTIONS = [
+        {
+          id: 'gobierno_rodrigo_paz',
+          titulo: '¿Qué opinas de las medidas adoptadas por el Gobierno de Rodrigo Paz?',
+          subtitulo: 'Aporta tu postura o análisis cívico de forma libre y soberana.',
+          categoria: 'Evaluación de Gestión',
+          activa: true,
+          visiblePublico: true,
+          orden: 1,
+          createdAtMs: 1727250000000
+        },
+        {
+          id: '10k_millones',
+          titulo: '¿Qué harías con los 10.000.000.000 $ (Diez mil millones de dólares americanos) que promete el Gobierno nacional?',
+          subtitulo: 'Aporta tu propuesta para el destino de estos recursos.',
+          categoria: 'Consulta Soberana',
+          activa: true,
+          visiblePublico: true,
+          orden: 2,
+          createdAtMs: 1727200000000
+        }
+      ];
+
+      // Inicializar con las preguntas obligatorias predeterminadas
+      const questionMap = new Map<string, any>();
+      DEFAULT_QUESTIONS.forEach(q => questionMap.set(q.id, q));
+
+      // Mezclar con documentos existentes en Firestore (si el admin editó visibilidad, títulos, etc.)
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const existing = questionMap.get(d.id) || {};
+        questionMap.set(d.id, { ...existing, id: d.id, ...data });
+      });
+
+      const list = Array.from(questionMap.values());
+      // Ordenar: la más reciente primero (mayor createdAtMs o timestamp)
+      list.sort((a: any, b: any) => {
+        const timeB = b.createdAtMs || (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0) || (b.orden ? (3 - b.orden) * 1000 : 0);
+        const timeA = a.createdAtMs || (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0) || (a.orden ? (3 - a.orden) * 1000 : 0);
+        return timeB - timeA;
+      });
+
+      // Filtrar solo las que están activas y visibles al público
+      const visibles = list.filter((p: any) => p.visiblePublico !== false && p.activa !== false);
+      setPreguntasConsultas(visibles.length > 0 ? visibles : DEFAULT_QUESTIONS);
+    });
+
+    return () => unsubPreguntas();
   }, []);
 
   useEffect(() => {
@@ -544,17 +608,23 @@ export default function App() {
   };
 
   // --- FLUJO DE ONBOARDING ---
-  const manejarEnvioRespuesta10k = async (e: React.FormEvent) => {
+  const manejarEnvioRespuestaPregunta = async (pregunta: any, e: React.FormEvent) => {
     e.preventDefault();
-    if (!respuesta10k.trim()) {
-      setError10k('Por favor escribe tu propuesta antes de enviar.');
+    const qId = pregunta.id;
+    const textoRespuesta = (respuestasPorPregunta[qId] || '').trim();
+
+    if (!textoRespuesta) {
+      setErrorPorPregunta(prev => ({ ...prev, [qId]: 'Por favor escribe tu opinión antes de enviar.' }));
       return;
     }
-    setError10k('');
-    setEnviandoRespuesta10k(true);
 
-    const docId = respuesta10kDocId || `resp_10k_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    setErrorPorPregunta(prev => ({ ...prev, [qId]: '' }));
+    setEnviandoPorPregunta(prev => ({ ...prev, [qId]: true }));
+
+    const docId = `resp_${qId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     setRespuesta10kDocId(docId);
+    setRespuesta10k(textoRespuesta);
+    setPreguntaRespondidaActual(pregunta);
 
     const now = new Date();
     const fecha = now.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -564,7 +634,9 @@ export default function App() {
 
     const dataPayload = {
       id: docId,
-      respuesta: respuesta10k.trim(),
+      preguntaId: qId,
+      preguntaTitulo: pregunta.titulo || '',
+      respuesta: textoRespuesta,
       fecha,
       hora,
       fechaHoraISO,
@@ -577,11 +649,16 @@ export default function App() {
     };
 
     try {
-      // 1. Guardar en base de datos Firestore (colección respuestas_10k_millones)
-      await setDoc(doc(db, 'respuestas_10k_millones', docId), dataPayload);
+      // 1. Guardar de inmediato en Firestore (sin recarga)
+      await setDoc(doc(db, 'respuestas_consultas', docId), dataPayload);
 
-      // 2. Guardar también mediante el endpoint de respaldo del servidor
-      fetch('/api/respuestas-10k', {
+      // Si es la pregunta histórica de 10k, guardar también en su colección dedicada
+      if (qId === '10k_millones') {
+        await setDoc(doc(db, 'respuestas_10k_millones', docId), dataPayload);
+      }
+
+      // 2. Guardar también en segundo plano en los endpoints del servidor para persistencia total
+      fetch('/api/respuestas-consultas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -590,26 +667,69 @@ export default function App() {
         })
       }).catch(err => console.warn('Respaldo en servidor:', err));
 
-      setOnboardingFase('invitacion_registro');
-    } catch (err: any) {
-      console.error('Error al guardar respuesta 10k en Firestore:', err);
-      // Intento por API del servidor
-      try {
-        await fetch('/api/respuestas-10k', {
+      if (qId === '10k_millones') {
+        fetch('/api/respuestas-10k', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: docId,
-            respuesta: respuesta10k.trim(),
-            status: 'pendiente'
+            ...dataPayload,
+            createdAt: undefined
+          })
+        }).catch(err => console.warn('Respaldo en servidor 10k:', err));
+      }
+
+      setEnviadasPorPregunta(prev => ({ ...prev, [qId]: true }));
+      // Invitar al registro manteniendo la respuesta segura en la base de datos
+      setOnboardingFase('invitacion_registro');
+    } catch (err: any) {
+      console.error('Error al guardar respuesta en Firestore:', err);
+      try {
+        await fetch('/api/respuestas-consultas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...dataPayload,
+            createdAt: undefined
           })
         });
+        setEnviadasPorPregunta(prev => ({ ...prev, [qId]: true }));
         setOnboardingFase('invitacion_registro');
       } catch (apiErr) {
-        setError10k('Error al guardar tu propuesta. Por favor intenta nuevamente.');
+        setErrorPorPregunta(prev => ({ ...prev, [qId]: 'Error al guardar tu propuesta. Por favor intenta nuevamente.' }));
       }
     } finally {
-      setEnviandoRespuesta10k(false);
+      setEnviandoPorPregunta(prev => ({ ...prev, [qId]: false }));
+    }
+  };
+
+  // Cargar Muro de Opiniones Cívicas
+  const abrirMuroDeOpiniones = async () => {
+    setPasoActual('muro_opiniones');
+    setCargandoMuro(true);
+    try {
+      // Consultar ambas colecciones para obtener todas las opiniones anónimas y registradas
+      const [snapConsultas, snap10k] = await Promise.all([
+        getDocs(query(collection(db, 'respuestas_consultas'))),
+        getDocs(query(collection(db, 'respuestas_10k_millones')))
+      ]);
+
+      const map = new Map<string, any>();
+      snap10k.docs.forEach(d => {
+        const item = { id: d.id, preguntaId: '10k_millones', ...d.data() };
+        map.set(d.id, item);
+      });
+      snapConsultas.docs.forEach(d => {
+        const item = { id: d.id, ...d.data() };
+        map.set(d.id, item);
+      });
+
+      const list = Array.from(map.values());
+      list.sort((a: any, b: any) => (b.timestampMs || 0) - (a.timestampMs || 0));
+      setTodasLasOpiniones(list);
+    } catch (err) {
+      console.error("Error al cargar opiniones del muro:", err);
+    } finally {
+      setCargandoMuro(false);
     }
   };
 
@@ -944,77 +1064,141 @@ export default function App() {
                 PANTALLA DE BIENVENIDA (Superpuesta en la parte superior)
                 ======================================================= */}
             <div 
-              className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-4 transition-all duration-1000 pointer-events-none ${
+              className={`absolute inset-0 z-20 flex flex-col items-center justify-start sm:justify-center p-3 sm:p-4 overflow-y-auto transition-all duration-1000 pointer-events-none ${
                 pasoActual !== 'bienvenida' ? 'opacity-0 scale-110' : 'opacity-100 bg-charcoal/40 backdrop-blur-sm'
               }`}
             >
-        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-5 sm:p-8 stone-card shadow-2xl max-w-[95%] md:max-w-lg w-full text-center relative overflow-y-auto max-h-[90vh] no-scrollbar flex flex-col transition-all duration-300 rounded-3xl ${
+        <div className={`bg-white/95 backdrop-blur-2xl border border-warmgray p-4 sm:p-6 stone-card shadow-2xl max-w-[95%] md:max-w-lg w-full text-center relative ${
+          onboardingFase === 'pregunta_10k' ? 'h-[92dvh] sm:h-[86vh] flex flex-col' : 'max-h-[92dvh] overflow-y-auto flex flex-col'
+        } no-scrollbar transition-all duration-300 rounded-3xl my-auto ${
           pasoActual === 'bienvenida' ? 'pointer-events-auto' : 'pointer-events-none'
         }`}>
           {/* Earth-toned background decor */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-sandbrown-light/20 rounded-full blur-[60px] -z-10"></div>
           
-          <EstadoRedLogo showText={true} textSize="xl" className="mb-2 shrink-0" />
+          <EstadoRedLogo showText={true} textSize="lg" className="shrink-0 mb-1" />
           
-          <div className="h-[2.5px] w-14 bg-palmgreen mx-auto mb-3 opacity-80 rounded-full shrink-0"></div>
+          <div className="h-[2px] w-12 bg-palmgreen mx-auto mb-2 opacity-80 rounded-full shrink-0"></div>
 
-          {/* FASE 1: PREGUNTA INICIAL OBLIGATORIA DE ENTRADA (Siempre activa al ingresar) */}
+          {/* FASE 1: PREGUNTAS DE CONSULTA SOBERANA DE ENTRADA (Solo las preguntas se deslizan) */}
           {onboardingFase === 'pregunta_10k' && (
-            <form onSubmit={manejarEnvioRespuesta10k} className="w-full flex flex-col gap-3 pt-1 animate-in fade-in zoom-in-95 duration-350 shrink-0 text-left">
-               <div className="text-center mb-1">
-                 <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase bg-sandbrown/10 text-sandbrown border border-sandbrown/20 mb-2">
-                   Consulta Soberana
+            <div className="w-full flex-1 min-h-0 flex flex-col gap-2 pt-0.5 animate-in fade-in zoom-in-95 duration-350 text-left">
+               {/* ENCABEZADO FIJO DE LAS CONSULTAS (Visible desde el inicio) */}
+               <div className="text-center shrink-0 mb-1">
+                 <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase bg-sandbrown/10 text-sandbrown border border-sandbrown/20 mb-1">
+                   Consultas Ciudadanas Activas ({preguntasConsultas.length})
                  </span>
-                 <h2 className="font-serif text-charcoal text-base sm:text-lg md:text-xl font-black leading-snug">
-                   ¿Qué harías con los 10.000.000.000 $ (Diez mil millones de dólares americanos) que promete el Gobierno nacional?
-                 </h2>
-                 <p className="text-[11px] text-charcoal/60 mt-1 font-medium">
-                   No necesitas registrarte para responder.
+                 <p className="text-[11px] sm:text-xs text-charcoal/65 font-medium leading-tight">
+                   No necesitas registrarte. Desliza hacia abajo para ver y responder cada pregunta.
                  </p>
                </div>
-               
-               <div className="relative w-full">
-                 <textarea 
-                   rows={4}
-                   maxLength={1000}
-                   placeholder="Escribe aquí tu propuesta o en qué invertirías este monto..." 
-                   value={respuesta10k}
-                   onChange={(e) => { setRespuesta10k(e.target.value); setError10k(''); }}
-                   className="w-full stone-input bg-creambg/60 border border-warmgray-dark rounded-2xl p-4 text-xs sm:text-sm text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-2 focus:ring-sandbrown/20 transition-all font-medium resize-none"
-                   autoFocus
-                 />
-                 <div className="text-[10px] text-charcoal/40 text-right pr-2 pt-0.5">
-                   {respuesta10k.length} / 1000 caracteres
+
+               {/* ZONA DESLIZABLE EXCLUSIVA PARA LAS PREGUNTAS (Solo esto tiene scroll) */}
+               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 space-y-3.5 no-scrollbar">
+                 {preguntasConsultas.map((preg, idx) => {
+                   const qId = preg.id;
+                   const valorActual = respuestasPorPregunta[qId] || '';
+                   const isSending = !!enviandoPorPregunta[qId];
+                   const isSent = !!enviadasPorPregunta[qId];
+                   const err = errorPorPregunta[qId];
+
+                   return (
+                     <form 
+                       key={qId || idx}
+                       onSubmit={(e) => manejarEnvioRespuestaPregunta(preg, e)}
+                       className="bg-[#FAF9F5]/90 border border-warmgray-dark rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2.5 transition hover:border-sandbrown/50"
+                     >
+                       <div className="flex items-center justify-between gap-2">
+                         <span className="text-[9.5px] font-bold tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-sandbrown/15 text-sandbrown-dark border border-sandbrown/20">
+                           Pregunta {idx + 1} de {preguntasConsultas.length} • {idx === 0 ? 'Más Reciente' : (preg.categoria || 'Consulta Soberana')}
+                         </span>
+                         {isSent && (
+                           <span className="text-[9.5px] font-bold uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                             <CheckCircle2 className="w-3 h-3" /> Registrada
+                           </span>
+                         )}
+                       </div>
+
+                       <div>
+                         <h3 className="font-serif text-charcoal text-xs sm:text-sm font-black leading-snug">
+                           {preg.titulo}
+                         </h3>
+                         {preg.subtitulo && (
+                           <p className="text-[10px] text-charcoal/60 mt-0.5 font-medium">
+                             {preg.subtitulo}
+                           </p>
+                         )}
+                       </div>
+
+                       <div className="relative w-full">
+                         <textarea 
+                           rows={2}
+                           maxLength={1000}
+                           placeholder="Escribe aquí tu respuesta u opinión ciudadana..." 
+                           value={valorActual}
+                           onChange={(e) => { 
+                             const txt = e.target.value;
+                             setRespuestasPorPregunta(prev => ({ ...prev, [qId]: txt }));
+                             if (errorPorPregunta[qId]) {
+                               setErrorPorPregunta(prev => ({ ...prev, [qId]: '' }));
+                             }
+                           }}
+                           className="w-full stone-input bg-white border border-warmgray-dark rounded-xl p-2.5 text-xs text-charcoal placeholder-charcoal/40 focus:outline-none focus:border-sandbrown focus:ring-1 focus:ring-sandbrown/20 transition-all font-medium resize-none shadow-2xs"
+                         />
+                         <div className="text-[9px] text-charcoal/40 text-right pr-1 pt-0.5">
+                           {valorActual.length} / 1000 caracteres
+                         </div>
+                       </div>
+
+                       {err && <p className="text-rust text-xs font-bold">{err}</p>}
+
+                       <button 
+                         type="submit" 
+                         disabled={isSending || !valorActual.trim()}
+                         className="stone-btn w-full px-3 py-2 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl transition-all font-black shadow-xs uppercase tracking-wider text-[10px] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
+                       >
+                         {isSending ? 'Guardando respuesta...' : isSent ? 'Actualizar mi respuesta' : 'Enviar mi respuesta'}
+                       </button>
+                     </form>
+                   );
+                 })}
+
+                 {preguntasConsultas.length > 1 && (
+                   <p className="text-[9.5px] text-charcoal/40 text-center font-serif italic pt-1">
+                     Desliza hacia arriba para revisar la pregunta anterior
+                   </p>
+                 )}
+               </div>
+
+               {/* SECCIÓN INFERIOR FIJA: VISIBLE DESDE UN PRINCIPIO SIN NECESIDAD DE DESLIZAR */}
+               <div className="shrink-0 pt-2 border-t border-[#ECE8DE] flex flex-col gap-1.5">
+                 <button 
+                   type="button" 
+                   onClick={abrirMuroDeOpiniones}
+                   className="stone-btn w-full py-2.5 px-3.5 bg-white hover:bg-warmgray/40 text-charcoal/80 border border-warmgray-dark rounded-xl flex items-center justify-center gap-2 text-[10.5px] font-bold uppercase tracking-wider transition shadow-2xs cursor-pointer"
+                 >
+                   <MessageSquare className="w-3.5 h-3.5 text-sandbrown" />
+                   <span>Leer opiniones anónimas ciudadanas</span>
+                 </button>
+
+                 <div className="text-center flex flex-col gap-1 pt-0.5">
+                   <button 
+                     type="button" 
+                     onClick={() => { setOnboardingFase('alias'); setErrorLogin(''); }} 
+                     className="text-[11px] font-bold text-charcoal/60 hover:text-sandbrown transition-colors cursor-pointer"
+                   >
+                     ¿Ya tienes cuenta en la red? <span className="underline decoration-sandbrown/40">Ingresar con tu alias</span>
+                   </button>
+                   <button 
+                     type="button" 
+                     onClick={() => setPasoActual('que_es_estadored')} 
+                     className="text-[10px] font-semibold text-charcoal/45 hover:text-charcoal/75 transition-colors cursor-pointer"
+                   >
+                     ¿Qué es EstadoRed? Conoce nuestra visión y estatutos
+                   </button>
                  </div>
                </div>
-               
-               {error10k && <p className="text-rust text-xs text-center font-bold">{error10k}</p>}
-               
-               <button 
-                 type="submit" 
-                 disabled={enviandoRespuesta10k || !respuesta10k.trim()}
-                 className="stone-btn w-full px-4 py-3.5 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl transition-all font-black shadow-md shadow-sandbrown/20 uppercase tracking-widest text-[11px] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-               >
-                 {enviandoRespuesta10k ? 'Registrando propuesta...' : 'Enviar mi respuesta'}
-               </button>
-
-               <div className="pt-2 text-center border-t border-[#ECE8DE]/60 mt-1 flex flex-col gap-1.5">
-                 <button 
-                   type="button" 
-                   onClick={() => { setOnboardingFase('alias'); setErrorLogin(''); }} 
-                   className="text-[11px] font-bold text-charcoal/60 hover:text-sandbrown transition-colors cursor-pointer"
-                 >
-                   ¿Ya tienes cuenta en la red? <span className="underline decoration-sandbrown/40">Ingresar con tu alias</span>
-                 </button>
-                 <button 
-                   type="button" 
-                   onClick={() => setPasoActual('que_es_estadored')} 
-                   className="text-[10px] font-semibold text-charcoal/45 hover:text-charcoal/75 transition-colors cursor-pointer"
-                 >
-                   ¿Qué es EstadoRed? Conoce nuestra visión y estatutos
-                 </button>
-               </div>
-            </form>
+            </div>
           )}
 
           {/* FASE 2: INVITACIÓN TRAS RESPONDER */}
@@ -1058,25 +1242,27 @@ export default function App() {
           {/* FASE 3: SESIÓN TERMINADA PARA QUIENES NO DESEAN REGISTRARSE */}
           {onboardingFase === 'sesion_terminada' && (
             <div className="w-full flex flex-col gap-4 pt-4 animate-in fade-in zoom-in-95 duration-350 shrink-0 text-center">
-               <h2 className="font-serif text-charcoal text-xl font-black mb-1">Sesión Finalizada</h2>
+               <h2 className="font-serif text-charcoal text-xl font-black mb-1">Opinión Guardada con Éxito</h2>
                <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed max-w-sm mx-auto">
-                 Tu opinión sobre los 10 mil millones de dólares ha quedado registrada en la red cívica soberana. ¡Gracias por participar!
+                 {preguntaRespondidaActual?.titulo 
+                   ? `Tu postura sobre "${preguntaRespondidaActual.titulo}" ha quedado registrada en la red cívica soberana.`
+                   : 'Tu opinión cívica ha quedado registrada en la red soberana.'} ¡Gracias por participar!
                </p>
                <p className="text-[11px] text-charcoal/50 italic">
-                 Las personas pueden responder las veces que lo deseen.
+                 Las personas pueden responder las veces que lo deseen a cualquiera de las preguntas.
                </p>
 
                <div className="flex flex-col gap-2.5 w-full mt-2">
                  <button 
                    type="button" 
                    onClick={() => {
-                     setRespuesta10k('');
+                     setPreguntaRespondidaActual(null);
                      setRespuesta10kDocId(null);
                      setOnboardingFase('pregunta_10k');
                    }}
                    className="stone-btn w-full px-4 py-3.5 bg-charcoal hover:bg-charcoal/90 text-white rounded-xl transition-all font-black uppercase tracking-wider text-[11px] shadow-md cursor-pointer"
                  >
-                   Responder nuevamente / Volver al inicio
+                   Volver a las consultas ciudadanas
                  </button>
                  <button 
                    type="button" 
@@ -1662,6 +1848,205 @@ export default function App() {
             </div>
 
             <EstatutoInfographic />
+          </main>
+        </div>
+      )}
+
+      {/* SECCIÓN ESPECIAL: MURO DE OPINIONES CIUDADANAS (CON Y SIN FILTRO) */}
+      {pasoActual === 'muro_opiniones' && (
+        <div className="absolute inset-0 z-50 flex flex-col bg-[#FAF9F5] overflow-y-auto no-scrollbar animate-in fade-in duration-350">
+          <header className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-[#ECE8DE] z-50 px-6 py-4 flex justify-between items-center shadow-xs">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setPasoActual('bienvenida')} 
+                className="p-2 hover:bg-warmgray/40 rounded-full transition cursor-pointer text-charcoal/70"
+                title="Volver"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <EstadoRedLogo showText={true} textSize="sm" />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setPasoActual('bienvenida')} 
+                className="px-4 py-2 bg-sandbrown hover:bg-sandbrown-dark text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm cursor-pointer"
+              >
+                Responder una pregunta
+              </button>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-8 space-y-6 pb-20">
+            <div className="bg-white border border-[#ECE8DE] rounded-3xl p-6 md:p-8 shadow-xs relative overflow-hidden">
+              <div className="max-w-2xl space-y-2">
+                <span className="inline-block text-[10px] font-bold tracking-[0.2em] text-sandbrown border border-sandbrown/20 bg-sandbrown/5 px-3 py-1 rounded-full uppercase shadow-xs">
+                  Plaza Cívica Abierta
+                </span>
+                <h1 className="font-serif font-black text-2xl md:text-3xl text-charcoal tracking-tight">
+                  Muro de Opiniones Soberanas
+                </h1>
+                <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-serif">
+                  Lee lo que los ciudadanos bolivianos están proponiendo anónimamente y con sus alias para el destino de los fondos y las reformas de la nación.
+                </p>
+              </div>
+
+              {/* CONTROL DE FILTRO: CON FILTRO vs SIN FILTRO */}
+              <div className="mt-6 pt-5 border-t border-[#ECE8DE] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-charcoal/70 flex items-center gap-1.5">
+                    <Filter className="w-4 h-4 text-sandbrown" /> Modo de visualización:
+                  </span>
+                  <div className="inline-flex p-1 bg-[#FAF9F5] border border-[#ECE8DE] rounded-xl">
+                    <button
+                      onClick={() => setFiltroModeracionActivo(true)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 ${
+                        filtroModeracionActivo 
+                          ? 'bg-sandbrown text-white shadow-xs' 
+                          : 'text-charcoal/60 hover:text-charcoal'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Con Filtro (Sin Odio)
+                    </button>
+                    <button
+                      onClick={() => setFiltroModeracionActivo(false)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 ${
+                        !filtroModeracionActivo 
+                          ? 'bg-charcoal text-white shadow-xs' 
+                          : 'text-charcoal/60 hover:text-charcoal'
+                      }`}
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-400" /> Sin Filtro (Crudo)
+                    </button>
+                  </div>
+                </div>
+
+                {/* FILTRO POR PREGUNTA */}
+                {preguntasConsultas.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-charcoal/60 font-semibold">Pregunta:</span>
+                    <select
+                      value={filtroMuroPregunta}
+                      onChange={(e) => setFiltroMuroPregunta(e.target.value)}
+                      className="bg-white border border-[#ECE8DE] text-xs font-semibold rounded-xl px-3 py-1.5 text-charcoal focus:outline-none focus:border-sandbrown"
+                    >
+                      <option value="todas">Todas las preguntas</option>
+                      {preguntasConsultas.map((p, idx) => (
+                        <option key={p.id || idx} value={p.id}>
+                          Pregunta #{idx + 1} ({p.id === '10k_millones' ? '$10.000 Millones' : p.titulo.slice(0, 30) + '...'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {!filtroModeracionActivo && (
+                <div className="mt-4 p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 font-serif">
+                  <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>Muro sin filtro activo:</strong> Mostrando el 100% de las respuestas registradas en la base de datos sin moderación previa. Todas las propuestas se guardan íntegramente.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* LISTADO DE OPINIONES */}
+            {cargandoMuro ? (
+              <div className="py-16 text-center text-charcoal/50 text-sm animate-pulse font-serif">
+                Sincronizando opiniones con la red cívica...
+              </div>
+            ) : (() => {
+              // Obtener el conjunto de IDs de preguntas actualmente activas y visibles al público
+              const activeQuestionIds = new Set(
+                preguntasConsultas
+                  .filter(p => p.visiblePublico !== false && p.activa !== false)
+                  .map(p => p.id)
+              );
+
+              const opinionesFiltradas = todasLasOpiniones
+                // Regla estricta: solo mostrar opiniones cuya pregunta matriz esté activa al público
+                .filter(op => {
+                  const qId = op.preguntaId || '10k_millones';
+                  return activeQuestionIds.has(qId);
+                })
+                .filter(op => {
+                  if (filtroMuroPregunta !== 'todas') {
+                    return (op.preguntaId || '10k_millones') === filtroMuroPregunta;
+                  }
+                  return true;
+                })
+                .filter(op => {
+                  if (!filtroModeracionActivo) return true; // Sin filtro: pasa todo
+                  const resultado = moderarOpinion(op.respuesta || '');
+                  return resultado.aprobado; // Con filtro: descarta insultos y odio
+                });
+
+              if (opinionesFiltradas.length === 0) {
+                return (
+                  <div className="bg-white border border-dashed border-[#ECE8DE] rounded-3xl p-12 text-center text-charcoal/60 font-serif space-y-2">
+                    <p className="text-base font-bold">Aún no hay opiniones visibles para este criterio.</p>
+                    <p className="text-xs">¡Sé el primero en compartir tu propuesta en la pantalla principal!</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs text-charcoal/50 px-1 font-mono">
+                    <span>Mostrando {opinionesFiltradas.length} aportes ciudadanos</span>
+                    <span>Orden: Más recientes primero</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {opinionesFiltradas.map((op, idx) => {
+                      const mod = moderarOpinion(op.respuesta || '');
+                      const esInadecuada = !mod.aprobado;
+
+                      return (
+                        <div 
+                          key={op.id || idx}
+                          className={`bg-white border rounded-2xl p-5 shadow-xs flex flex-col justify-between transition hover:shadow-md ${
+                            esInadecuada ? 'border-amber-300 bg-amber-50/20' : 'border-[#ECE8DE]'
+                          }`}
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-2 text-[10.5px]">
+                              <span className="font-bold text-sandbrown-dark flex items-center gap-1.5">
+                                {op.esAnonima || !op.alias ? (
+                                  <><span>👤</span> <span>Ciudadano Anónimo</span></>
+                                ) : (
+                                  <><span>⚡</span> <span>@{op.alias}</span></>
+                                )}
+                              </span>
+
+                              <span className="text-charcoal/45 font-mono text-[9.5px]">
+                                {op.fecha || ''} {op.hora || ''}
+                              </span>
+                            </div>
+
+                            <p className="font-serif text-charcoal text-sm leading-relaxed whitespace-pre-wrap">
+                              "{op.respuesta}"
+                            </p>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-[#ECE8DE]/60 flex items-center justify-between text-[10px] text-charcoal/50">
+                            <span className="italic">
+                              {op.preguntaId === 'prioridad_urgente_bolivia' ? 'Reforma Nacional' : 'Inversión $10k Millones'}
+                            </span>
+                            {esInadecuada && (
+                              <span className="font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[9px]">
+                                No filtrada
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </main>
         </div>
       )}

@@ -129,9 +129,53 @@
         "createdAt": { "type": "object" }
       },
       "required": ["respuesta", "fecha", "hora"]
+    },
+    "PreguntaConsulta": {
+      "title": "PreguntaConsulta",
+      "description": "Pregunta de consulta cívica mostrada en la pantalla inicial.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "titulo": { "type": "string" },
+        "subtitulo": { "type": "string" },
+        "categoria": { "type": "string" },
+        "activa": { "type": "boolean" },
+        "visiblePublico": { "type": "boolean" },
+        "orden": { "type": "number" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["id", "titulo", "activa", "visiblePublico"]
+    },
+    "RespuestaConsulta": {
+      "title": "RespuestaConsulta",
+      "description": "Respuestas ciudadanas a preguntas de consulta cívica (anónimas o vinculadas).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "preguntaId": { "type": "string" },
+        "respuesta": { "type": "string" },
+        "userId": { "type": "string" },
+        "alias": { "type": "string" },
+        "status": { "type": "string" },
+        "esAnonima": { "type": "boolean" },
+        "fecha": { "type": "string" },
+        "hora": { "type": "string" },
+        "fechaHoraISO": { "type": "string" },
+        "timestampMs": { "type": "number" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["id", "preguntaId", "respuesta", "fecha", "hora"]
     }
   },
   "firestore": {
+    "/preguntas_consultas/{preguntaId}": {
+      "schema": { "$ref": "#/entities/PreguntaConsulta" },
+      "description": "Colección de preguntas de consulta ciudadana para la pantalla principal."
+    },
+    "/respuestas_consultas/{respId}": {
+      "schema": { "$ref": "#/entities/RespuestaConsulta" },
+      "description": "Colección unificada de respuestas cívicas por pregunta."
+    },
     "/respuestas_10k_millones/{respId}": {
       "schema": { "$ref": "#/entities/Respuesta10kMillones" },
       "description": "Respuestas de la pregunta inicial de 10 mil millones de dolares vinculadas o anonimas."
